@@ -6,6 +6,9 @@ dist/
 *.env
 coverage/
 data/
+*.db-shm
+*.db-wal
+*.db-journal
 docs/superpowers/
 spec-review.md
 /PROMPT.md
