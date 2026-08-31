@@ -44,6 +44,12 @@ export function getPendingAnalysisRequests(db: LensDb): AnalysisRequestRow[] {
     .all() as unknown as AnalysisRequestRow[];
 }
 
+export function getAnalysisRequestsForFinding(db: LensDb, findingId: number): AnalysisRequestRow[] {
+  return db.conn
+    .prepare('SELECT * FROM analysis_requests WHERE finding_id = ? ORDER BY created_at ASC')
+    .all(findingId) as unknown as AnalysisRequestRow[];
+}
+
 export function submitAnalysis(
   db: LensDb,
   id: number,

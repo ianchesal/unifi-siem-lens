@@ -4,6 +4,7 @@ import { upsertFinding } from '../../src/db/findingsStore.js';
 import { openLensDb } from '../../src/db/lensDb.js';
 import {
   createAnalysisRequest,
+  getAnalysisRequestsForFinding,
   getPendingAnalysisRequests,
   submitAnalysis,
 } from '../../src/db/analysisRequestsStore.js';
@@ -41,5 +42,22 @@ describe('analysisRequestsStore', () => {
     const req = createAnalysisRequest(lensDb, finding.id as number, {}, 't1');
     submitAnalysis(lensDb, req.id, 'first answer', 'low', 't2');
     expect(() => submitAnalysis(lensDb, req.id, 'second answer', 'low', 't3')).toThrow();
+  });
+
+  it('getAnalysisRequestsForFinding returns all requests for a finding, including answered ones', () => {
+    const lensDb = openLensDb(':memory:');
+    const finding = upsertFinding(lensDb, applyTrigger(null, 'internal_source', 't0', 'source_ip', '1.2.3.4'));
+    const other = upsertFinding(lensDb, applyTrigger(null, 'internal_source', 't0', 'source_ip', '5.6.7.8'));
+    const first = createAnalysisRequest(lensDb, finding.id as number, {}, 't1');
+    submitAnalysis(lensDb, first.id, 'looks benign', 'low', 't2');
+    const second = createAnalysisRequest(lensDb, finding.id as number, {}, 't3');
+    createAnalysisRequest(lensDb, other.id as number, {}, 't4');
+
+    const results = getAnalysisRequestsForFinding(lensDb, finding.id as number);
+    expect(results).toHaveLength(2);
+    expect(results.map((r) => r.id)).toEqual([first.id, second.id]);
+    expect(results[0].status).toBe('answered');
+    expect(results[0].recommendation).toBe('looks benign');
+    expect(results[1].status).toBe('pending');
   });
 });

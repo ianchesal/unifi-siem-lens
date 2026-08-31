@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { createAnalysisRequest, getPendingAnalysisRequests } from '../db/analysisRequestsStore.js';
+import {
+  createAnalysisRequest,
+  getAnalysisRequestsForFinding,
+  getPendingAnalysisRequests,
+} from '../db/analysisRequestsStore.js';
 import { listFindings } from '../db/findingsStore.js';
 import type { LensDb } from '../db/lensDb.js';
 
@@ -19,8 +23,11 @@ export function createAnalysisRequestsRouter(lensDb: LensDb): Router {
 
   router.get('/analysis-requests', (req, res) => {
     const findingId = req.query.findingId ? Number(req.query.findingId) : undefined;
-    const pending = getPendingAnalysisRequests(lensDb);
-    res.json(findingId ? pending.filter((r) => r.finding_id === findingId) : pending);
+    if (findingId !== undefined) {
+      res.json(getAnalysisRequestsForFinding(lensDb, findingId));
+      return;
+    }
+    res.json(getPendingAnalysisRequests(lensDb));
   });
 
   return router;
