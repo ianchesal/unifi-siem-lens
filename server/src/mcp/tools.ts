@@ -14,17 +14,25 @@ function toolResult(data: unknown) {
 
 function toolError(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true as const };
+  return {
+    content: [{ type: 'text' as const, text: `Error: ${message}` }],
+    isError: true as const,
+  };
 }
 
 export function registerAnalysisTools(server: McpServer, lensDb: LensDb): void {
-  server.tool('get_pending_analyses', 'List pending analysis requests awaiting a recommendation.', {}, async () => {
-    try {
-      return toolResult(getPendingAnalysisRequests(lensDb));
-    } catch (e) {
-      return toolError(e);
+  server.tool(
+    'get_pending_analyses',
+    'List pending analysis requests awaiting a recommendation.',
+    {},
+    async () => {
+      try {
+        return toolResult(getPendingAnalysisRequests(lensDb));
+      } catch (e) {
+        return toolError(e);
+      }
     }
-  });
+  );
 
   server.tool(
     'get_analysis_context',
@@ -53,7 +61,13 @@ export function registerAnalysisTools(server: McpServer, lensDb: LensDb): void {
     },
     async (p) => {
       try {
-        const result = submitAnalysis(lensDb, p.id, p.recommendation, p.risk_level, new Date().toISOString());
+        const result = submitAnalysis(
+          lensDb,
+          p.id,
+          p.recommendation,
+          p.risk_level,
+          new Date().toISOString()
+        );
         return toolResult(result);
       } catch (e) {
         return toolError(e);

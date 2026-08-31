@@ -78,7 +78,12 @@ export function hasSeenSignature(db: LensDb, category: string, signature: string
   return row !== undefined;
 }
 
-export function markSeenSignature(db: LensDb, category: string, signature: string, now: string): void {
+export function markSeenSignature(
+  db: LensDb,
+  category: string,
+  signature: string,
+  now: string
+): void {
   db.conn
     .prepare(
       'INSERT OR IGNORE INTO seen_signatures (category, signature, first_seen) VALUES (?, ?, ?)'

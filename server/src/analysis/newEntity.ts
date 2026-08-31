@@ -16,7 +16,10 @@ export function detectNewSignatures(
   return [...found.values()];
 }
 
-export function detectNewSourceIps(events: { source_ip: string | null }[], seen: Set<string>): string[] {
+export function detectNewSourceIps(
+  events: { source_ip: string | null }[],
+  seen: Set<string>
+): string[] {
   const found = new Set<string>();
   for (const e of events) {
     if (!e.source_ip || seen.has(e.source_ip)) continue;
