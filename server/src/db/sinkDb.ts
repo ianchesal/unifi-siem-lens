@@ -30,7 +30,11 @@ const EXPECTED_COLUMNS = [
 ];
 
 export function openSinkDb(path: string): SinkDb {
-  const conn = new DatabaseSync(path, { readOnly: true });
+  // :memory: databases exist only for test scaffolding (there is no real
+  // sink data to protect), and node:sqlite's readOnly mode rejects even the
+  // initial CREATE TABLE needed to seed one. Real file paths stay read-only
+  // so lens can never write to the sink's live database.
+  const conn = new DatabaseSync(path, { readOnly: path !== ':memory:' });
   return { conn };
 }
 
