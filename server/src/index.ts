@@ -3,7 +3,7 @@ import { loadConfig } from './config.js';
 import { openLensDb } from './db/lensDb.js';
 import { openSinkDb, type SinkDb, verifySchema } from './db/sinkDb.js';
 import { createLogger } from './logger.js';
-import { createApp } from './server.js';
+import { createApp, type SchemaCheckResult } from './server.js';
 
 const config = loadConfig();
 const logger = createLogger(config.logLevel);
@@ -16,9 +16,10 @@ logger.info('Starting unifi-siem-lens');
 // up and can report the problem, and retry is just a restart away once the
 // sink DB shows up.
 let sinkDb: SinkDb | null = null;
+let schemaCheck: SchemaCheckResult | null = null;
 try {
   sinkDb = openSinkDb(config.sinkDbPath);
-  const schemaCheck = verifySchema(sinkDb);
+  schemaCheck = verifySchema(sinkDb);
   if (!schemaCheck.ok) {
     logger.error(
       `Sink DB schema mismatch, missing columns: ${schemaCheck.missingColumns.join(', ')}`
@@ -64,7 +65,7 @@ function runDailyCheckSafely(): void {
 runDailyCheckSafely();
 const dailyTimer = setInterval(runDailyCheckSafely, 24 * 60 * 60 * 1000);
 
-const app = createApp(sinkDb, lensDb, runnerDeps, config);
+const app = createApp(sinkDb, lensDb, runnerDeps, config, schemaCheck);
 const httpServer = app.listen(config.port, config.host, () => {
   logger.info(`Listening on ${config.host}:${config.port}`);
   logger.info(`GET http://${config.host}:${config.port}/health`);

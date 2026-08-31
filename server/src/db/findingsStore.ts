@@ -60,14 +60,27 @@ export function upsertFinding(db: LensDb, finding: Finding): Finding {
   return getFinding(db, finding.entity_type, finding.entity_key) as Finding;
 }
 
-export function listFindings(db: LensDb, opts: { status?: FindingStatus } = {}): Finding[] {
-  const rows = opts.status
-    ? (db.conn
-        .prepare('SELECT * FROM findings WHERE status = ? ORDER BY severity_score DESC')
-        .all(opts.status) as unknown as FindingRow[])
-    : (db.conn
-        .prepare('SELECT * FROM findings ORDER BY severity_score DESC')
-        .all() as unknown as FindingRow[]);
+export function listFindings(
+  db: LensDb,
+  opts: { status?: FindingStatus; excludeStatuses?: FindingStatus[] } = {}
+): Finding[] {
+  let rows: FindingRow[];
+  if (opts.status) {
+    rows = db.conn
+      .prepare('SELECT * FROM findings WHERE status = ? ORDER BY severity_score DESC')
+      .all(opts.status) as unknown as FindingRow[];
+  } else if (opts.excludeStatuses && opts.excludeStatuses.length > 0) {
+    const placeholders = opts.excludeStatuses.map(() => '?').join(', ');
+    rows = db.conn
+      .prepare(
+        `SELECT * FROM findings WHERE status NOT IN (${placeholders}) ORDER BY severity_score DESC`
+      )
+      .all(...opts.excludeStatuses) as unknown as FindingRow[];
+  } else {
+    rows = db.conn
+      .prepare('SELECT * FROM findings ORDER BY severity_score DESC')
+      .all() as unknown as FindingRow[];
+  }
   return rows.map(rowToFinding);
 }
 

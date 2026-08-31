@@ -1,0 +1,68 @@
+import request from 'supertest';
+import { describe, expect, it } from 'vitest';
+import { openLensDb } from '../src/db/lensDb.js';
+import type { SinkDb } from '../src/db/sinkDb.js';
+import { createApp } from '../src/server.js';
+
+const baseConfig = {
+  port: 3100,
+  host: '127.0.0.1',
+  sinkDbPath: '/dev/null',
+  lensDbPath: ':memory:',
+  lanCidrs: [],
+  unifiMcpServerUrl: null,
+  logLevel: 'error' as const,
+};
+
+const fakeSinkDb = {} as SinkDb;
+
+describe('createApp /health', () => {
+  it('reports ok when sinkDb is present and schema matches', async () => {
+    const lensDb = openLensDb(':memory:');
+    const app = createApp(fakeSinkDb, lensDb, null, baseConfig, { ok: true, missingColumns: [] });
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(res.body.sinkDb).toBe('available');
+    expect(res.body.schema).toBe('ok');
+  });
+
+  it('reports degraded with a distinguishable "schema" mismatch when sinkDb is present but schema check failed', async () => {
+    const lensDb = openLensDb(':memory:');
+    const app = createApp(fakeSinkDb, lensDb, null, baseConfig, {
+      ok: false,
+      missingColumns: ['signature'],
+    });
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('degraded');
+    expect(res.body.sinkDb).toBe('available');
+    expect(res.body.schema).toBe('mismatch');
+    expect(res.body.missingColumns).toEqual(['signature']);
+  });
+
+  it('reports degraded with sinkDb unavailable when sinkDb is null, distinct from a schema mismatch', async () => {
+    const lensDb = openLensDb(':memory:');
+    const app = createApp(null, lensDb, null, baseConfig, null);
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('degraded');
+    expect(res.body.sinkDb).toBe('unavailable');
+    expect(res.body.schema).toBe('unknown');
+    expect(res.body.missingColumns).toBeUndefined();
+  });
+});
+
+describe('createApp route precedence', () => {
+  it('does not let the static/SPA fallback swallow /api or /health routes', async () => {
+    const lensDb = openLensDb(':memory:');
+    const app = createApp(null, lensDb, null, baseConfig, null);
+
+    const health = await request(app).get('/health');
+    expect(health.status).toBe(200);
+
+    const findings = await request(app).get('/api/findings');
+    expect(findings.status).toBe(200);
+    expect(Array.isArray(findings.body)).toBe(true);
+  });
+});

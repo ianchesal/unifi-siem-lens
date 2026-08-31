@@ -35,4 +35,8 @@ npm start
 ```
 
 Serves the built dashboard and API from a single process on `PORT`
-(default 3100).
+(default 3100). By default the server binds to `127.0.0.1` only (localhost),
+so it's not reachable from other devices on your network. To expose it more
+widely, set `HOST` in `server/.env` to your LAN interface IP (or `0.0.0.0`
+to bind all interfaces) — do this deliberately, since the dashboard has no
+authentication.

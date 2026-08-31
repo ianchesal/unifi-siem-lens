@@ -29,6 +29,33 @@ export function listEvents(db: SinkDb, opts: { since?: string; limit?: number })
     .all(...params, limit) as unknown as StoredEvent[];
 }
 
+// Recent raw events for a given source IP, most-recent first. Used as LLM
+// analysis context (spec: "relevant recent raw events pulled from events.db
+// as context") — capped low since this is prompt context, not a data dump.
+export function eventsForSourceIp(db: SinkDb, sourceIp: string, limit = 20): StoredEvent[] {
+  return db.conn
+    .prepare(
+      `SELECT id, received_at, category, severity, source_ip, dest_ip, signature, message, raw
+       FROM events WHERE source_ip = ? ORDER BY received_at DESC LIMIT ?`
+    )
+    .all(sourceIp, limit) as unknown as StoredEvent[];
+}
+
+// Recent raw events for a given (category, signature) pair, most-recent first.
+export function eventsForSignature(
+  db: SinkDb,
+  category: string,
+  signature: string,
+  limit = 20
+): StoredEvent[] {
+  return db.conn
+    .prepare(
+      `SELECT id, received_at, category, severity, source_ip, dest_ip, signature, message, raw
+       FROM events WHERE category = ? AND signature = ? ORDER BY received_at DESC LIMIT ?`
+    )
+    .all(category, signature, limit) as unknown as StoredEvent[];
+}
+
 export function eventsOverTime(
   db: SinkDb,
   opts: { sinceDays: number }

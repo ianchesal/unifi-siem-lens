@@ -2,6 +2,15 @@ export function signatureKey(category: string, signature: string): string {
   return `${category}|${signature}`;
 }
 
+// Inverse of signatureKey(). Splits only on the FIRST '|' so a signature that
+// itself contains a '|' doesn't get mangled by a naive key.split('|') (the bug
+// flagged in Task 12's review) — category never contains '|', signature might.
+export function splitSignatureKey(key: string): { category: string; signature: string } {
+  const sep = key.indexOf('|');
+  if (sep === -1) return { category: key, signature: '' };
+  return { category: key.slice(0, sep), signature: key.slice(sep + 1) };
+}
+
 export function detectNewSignatures(
   events: { category: string; signature: string | null }[],
   seen: Set<string>
