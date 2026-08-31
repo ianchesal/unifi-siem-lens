@@ -1,13 +1,14 @@
 import express from 'express';
 import { type RunnerDeps, runHourlyChecks } from './analysis/runner.js';
 import { createEventsRouter } from './api/events.js';
+import { createFindingsRouter } from './api/findings.js';
 import type { Config } from './config.js';
 import type { LensDb } from './db/lensDb.js';
 import type { SinkDb } from './db/sinkDb.js';
 
 export function createApp(
   sinkDb: SinkDb | null,
-  _lensDb: LensDb,
+  lensDb: LensDb,
   runnerDeps: RunnerDeps | null,
   _config: Config
 ) {
@@ -19,6 +20,7 @@ export function createApp(
   });
 
   app.use('/api', createEventsRouter(sinkDb));
+  app.use('/api', createFindingsRouter(lensDb));
 
   app.post('/api/analysis/run', (_req, res) => {
     if (!runnerDeps) {

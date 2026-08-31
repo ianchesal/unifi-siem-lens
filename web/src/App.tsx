@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from './api';
+import { FindingsList } from './components/FindingsList';
 
 interface SignatureCount {
   signature: string;
@@ -30,6 +31,7 @@ export default function App() {
           ))}
         </ul>
       )}
+      <FindingsList />
     </div>
   );
 }
