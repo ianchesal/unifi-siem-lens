@@ -32,5 +32,6 @@ describe('zScore / isAnomalous', () => {
     const stats = computeBaseline([5, 5, 5]);
     expect(isAnomalous(5, stats)).toBe(false);
     expect(isAnomalous(50, stats)).toBe(true);
+    expect(isAnomalous(2, stats)).toBe(false); // below the mean — a drop, not a spike, should not be flagged
   });
 });

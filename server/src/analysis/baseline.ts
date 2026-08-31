@@ -14,7 +14,7 @@ export function computeBaseline(dailyCounts: number[]): BaselineStats {
 }
 
 export function zScore(value: number, stats: BaselineStats): number {
-  if (stats.stddev === 0) return value === stats.mean ? 0 : Number.POSITIVE_INFINITY;
+  if (stats.stddev === 0) return value > stats.mean ? Number.POSITIVE_INFINITY : 0;
   return (value - stats.mean) / stats.stddev;
 }
 
