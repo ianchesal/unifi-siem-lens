@@ -8,16 +8,19 @@ import { createFindingsRouter } from './api/findings.js';
 import type { Config } from './config.js';
 import type { LensDb } from './db/lensDb.js';
 import type { SinkDb } from './db/sinkDb.js';
+import { createUnifiMcpClient } from './enrichment/unifiMcpClient.js';
 import { registerAnalysisTools } from './mcp/tools.js';
 
 export function createApp(
   sinkDb: SinkDb | null,
   lensDb: LensDb,
   runnerDeps: RunnerDeps | null,
-  _config: Config
+  config: Config
 ) {
   const app = express();
   app.use(express.json());
+
+  const unifiMcp = createUnifiMcpClient(config.unifiMcpServerUrl);
 
   app.get('/health', (_req, res) => {
     res.json({ status: sinkDb ? 'ok' : 'degraded', sinkDb: sinkDb ? 'connected' : 'unavailable' });
@@ -25,7 +28,7 @@ export function createApp(
 
   app.use('/api', createEventsRouter(sinkDb));
   app.use('/api', createFindingsRouter(lensDb));
-  app.use('/api', createAnalysisRequestsRouter(lensDb));
+  app.use('/api', createAnalysisRequestsRouter(lensDb, unifiMcp));
 
   app.post('/api/analysis/run', (_req, res) => {
     if (!runnerDeps) {

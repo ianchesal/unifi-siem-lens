@@ -6,6 +6,7 @@ import { submitAnalysis } from '../../src/db/analysisRequestsStore.js';
 import { upsertFinding } from '../../src/db/findingsStore.js';
 import { openLensDb } from '../../src/db/lensDb.js';
 import { createAnalysisRequestsRouter } from '../../src/api/analysisRequests.js';
+import { createUnifiMcpClient } from '../../src/enrichment/unifiMcpClient.js';
 
 describe('analysis-requests API', () => {
   it('POST /findings/:id/analyze creates a pending request; GET /analysis-requests lists it', async () => {
@@ -14,7 +15,7 @@ describe('analysis-requests API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/api', createAnalysisRequestsRouter(lensDb));
+    app.use('/api', createAnalysisRequestsRouter(lensDb, createUnifiMcpClient(null)));
 
     const analyzeRes = await request(app).post(`/api/findings/${finding.id}/analyze`);
     expect(analyzeRes.status).toBe(200);
@@ -33,7 +34,7 @@ describe('analysis-requests API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/api', createAnalysisRequestsRouter(lensDb));
+    app.use('/api', createAnalysisRequestsRouter(lensDb, createUnifiMcpClient(null)));
 
     const analyzeRes = await request(app).post(`/api/findings/${finding.id}/analyze`);
     expect(analyzeRes.status).toBe(200);
