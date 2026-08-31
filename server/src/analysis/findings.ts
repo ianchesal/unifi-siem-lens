@@ -67,12 +67,23 @@ export function applyTrigger(
     ? existing.triggers.map((t) => (t.type === type ? { ...t, active: true, last_seen: now } : t))
     : [...existing.triggers, { type, first_seen: now, last_seen: now, active: true }];
 
+  // Rule 5 (refresh preserves status) has a narrow exception: a resolved
+  // finding is machine-set on the premise "all triggers currently inactive."
+  // If a standing trigger the finding already carries reactivates, that
+  // premise no longer holds, so the finding must reopen rather than stay
+  // silently resolved with a nonzero severity score.
+  const status: FindingStatus = hasType
+    ? existing.status === 'resolved'
+      ? 'new'
+      : existing.status
+    : 'new';
+
   return {
     ...existing,
     last_seen: now,
     triggers,
     severity_score: computeSeverityScore(triggers),
-    status: hasType ? existing.status : 'new',
+    status,
   };
 }
 
@@ -82,6 +93,10 @@ export function reevaluateTrigger(
   active: boolean,
   now: string
 ): Finding {
+  if (!finding.triggers.some((t) => t.type === type)) {
+    return finding;
+  }
+
   const triggers = finding.triggers.map((t) =>
     t.type === type ? { ...t, active, last_seen: active ? now : t.last_seen } : t
   );
