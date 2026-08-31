@@ -1,37 +1,18 @@
-import { useEffect, useState } from 'react';
-import { fetchJson } from './api';
+import { EventsOverTimeChart } from './components/EventsOverTimeChart';
 import { FindingsList } from './components/FindingsList';
-
-interface SignatureCount {
-  signature: string;
-  count: number;
-}
+import { SeverityChart } from './components/SeverityChart';
+import { TopSignaturesChart } from './components/TopSignaturesChart';
+import { TopSourceIpsChart } from './components/TopSourceIpsChart';
 
 export default function App() {
-  const [signatures, setSignatures] = useState<SignatureCount[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchJson<SignatureCount[]>('/api/stats/top-signatures')
-      .then(setSignatures)
-      .catch((e) => setError(String(e)));
-  }, []);
-
   return (
     <div style={{ fontFamily: 'sans-serif', padding: '2rem' }}>
       <h1>unifi-siem-lens</h1>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {!error && !signatures && <p>Loading...</p>}
-      {signatures && (
-        <ul>
-          {signatures.map((s) => (
-            <li key={s.signature}>
-              {s.signature}: {s.count}
-            </li>
-          ))}
-        </ul>
-      )}
       <FindingsList />
+      <EventsOverTimeChart />
+      <TopSignaturesChart />
+      <TopSourceIpsChart />
+      <SeverityChart />
     </div>
   );
 }
