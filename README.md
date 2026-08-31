@@ -13,6 +13,10 @@ cp server/.env.example server/.env
 npm run dev
 ```
 
+> **Note:** If `npm run dev` fails to boot (a known issue on Node 24.x/25.x — see
+> `unifi-siem-sink`'s CLAUDE.md for details), use `npm run build -w server && npm run start -w server`
+> instead, alongside `npm run dev -w web` for the frontend.
+
 This starts the server (`http://localhost:3100`) and the Vite dev server
 (`http://localhost:5173`, proxying `/api` to the server) together. The
 server's `/mcp` endpoint (see below) is served directly on port 3100 and is
