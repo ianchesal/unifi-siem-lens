@@ -7,6 +7,7 @@ export interface StoredEvent {
   severity: number | null;
   source_ip: string | null;
   dest_ip: string | null;
+  action: string | null;
   signature: string | null;
   message: string | null;
   raw: string;
@@ -35,7 +36,7 @@ export function listEvents(db: SinkDb, opts: { since?: string; limit?: number })
 export function eventsForSourceIp(db: SinkDb, sourceIp: string, limit = 20): StoredEvent[] {
   return db.conn
     .prepare(
-      `SELECT id, received_at, category, severity, source_ip, dest_ip, signature, message, raw
+      `SELECT id, received_at, category, severity, source_ip, dest_ip, action, signature, message, raw
        FROM events WHERE source_ip = ? ORDER BY received_at DESC LIMIT ?`
     )
     .all(sourceIp, limit) as unknown as StoredEvent[];
@@ -50,7 +51,7 @@ export function eventsForSignature(
 ): StoredEvent[] {
   return db.conn
     .prepare(
-      `SELECT id, received_at, category, severity, source_ip, dest_ip, signature, message, raw
+      `SELECT id, received_at, category, severity, source_ip, dest_ip, action, signature, message, raw
        FROM events WHERE category = ? AND signature = ? ORDER BY received_at DESC LIMIT ?`
     )
     .all(category, signature, limit) as unknown as StoredEvent[];
@@ -116,4 +117,78 @@ export function severityDistribution(
        GROUP BY severity ORDER BY severity ASC`
     )
     .all(`-${opts.sinceDays} days`) as unknown as { severity: number | null; count: number }[];
+}
+
+export interface EntityEventCounts {
+  total: number;
+  matching: number;
+}
+
+// SQL-level completeness check for rule-based triage: counts every event for
+// the entity in the window (`total`) alongside only those also satisfying
+// `matchingWhereSql` (`matching`). Deliberately does not reuse the LIMIT-20
+// fetchers above — those are sized for LLM prompt context, and a burst of
+// more than 20 events could otherwise let the most recent 20 stand in for
+// "every event" and hide a non-matching event outside the cap.
+export function sourceIpEventCounts(
+  db: SinkDb,
+  sourceIp: string,
+  sinceIso: string,
+  matchingWhereSql: string,
+  matchingParams: (string | number)[] = []
+): EntityEventCounts {
+  const total = (
+    db.conn
+      .prepare('SELECT COUNT(*) as n FROM events WHERE source_ip = ? AND received_at >= ?')
+      .get(sourceIp, sinceIso) as { n: number }
+  ).n;
+  const matching = (
+    db.conn
+      .prepare(
+        `SELECT COUNT(*) as n FROM events WHERE source_ip = ? AND received_at >= ? AND (${matchingWhereSql})`
+      )
+      .get(sourceIp, sinceIso, ...matchingParams) as { n: number }
+  ).n;
+  return { total, matching };
+}
+
+export function signatureEventCounts(
+  db: SinkDb,
+  category: string,
+  signature: string,
+  sinceIso: string,
+  matchingWhereSql: string,
+  matchingParams: (string | number)[] = []
+): EntityEventCounts {
+  const total = (
+    db.conn
+      .prepare(
+        'SELECT COUNT(*) as n FROM events WHERE category = ? AND signature = ? AND received_at >= ?'
+      )
+      .get(category, signature, sinceIso) as { n: number }
+  ).n;
+  const matching = (
+    db.conn
+      .prepare(
+        `SELECT COUNT(*) as n FROM events WHERE category = ? AND signature = ? AND received_at >= ? AND (${matchingWhereSql})`
+      )
+      .get(category, signature, sinceIso, ...matchingParams) as { n: number }
+  ).n;
+  return { total, matching };
+}
+
+// Unbounded (no LIMIT) category+message rows for a source IP in the window.
+// Used only by the admin-audit-login triage rule, whose match condition
+// (regex over free text) can't be expressed as a SQL predicate the way the
+// other rules' counts above are — audit-category volume per entity per
+// window is inherently small, so fetching all of it is cheap and, unlike a
+// capped fetch, doesn't risk missing a non-matching event.
+export function auditCandidateEvents(
+  db: SinkDb,
+  sourceIp: string,
+  sinceIso: string
+): { category: string; message: string | null }[] {
+  return db.conn
+    .prepare('SELECT category, message FROM events WHERE source_ip = ? AND received_at >= ?')
+    .all(sourceIp, sinceIso) as unknown as { category: string; message: string | null }[];
 }
