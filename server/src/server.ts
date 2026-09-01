@@ -69,7 +69,7 @@ export function createApp(
   });
 
   app.use('/api', createEventsRouter(sinkDb));
-  app.use('/api', createFindingsRouter(lensDb));
+  app.use('/api', createFindingsRouter(lensDb, sinkDb));
   app.use('/api', createAnalysisRequestsRouter(lensDb, unifiMcp, sinkDb));
 
   app.post('/api/analysis/run', (_req, res) => {

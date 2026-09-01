@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
+import { EventsModal } from './EventsModal';
 import { GlobeIcon, SeverityIcon, SignatureIcon, STANDING_TRIGGER_TYPES, TRIGGER_ICONS, TRIGGER_LABELS } from '../icons';
 import { severityBand } from '../severity';
 
@@ -65,6 +66,7 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
   const [requests, setRequests] = useState<Record<number, AnalysisRequest[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [statusTab, setStatusTab] = useState<StatusTab>('active');
+  const [viewingEventsFor, setViewingEventsFor] = useState<number | null>(null);
 
   const load = () => {
     const query = statusTab === 'active' ? '' : `?status=${statusTab}`;
@@ -189,6 +191,9 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
                     </button>
                   </>
                 )}
+                <button className="btn btn-ghost" type="button" onClick={() => setViewingEventsFor(f.id)}>
+                  View raw events
+                </button>
                 <span className="spacer" />
                 {seenAgo && <span className="timestamp">first seen {seenAgo}</span>}
                 <button className="btn btn-primary" type="button" disabled={!!pending} onClick={() => analyze(f.id)}>
@@ -223,6 +228,10 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
           );
         })}
       </div>
+
+      {viewingEventsFor !== null && (
+        <EventsModal findingId={viewingEventsFor} onClose={() => setViewingEventsFor(null)} />
+      )}
     </div>
   );
 }
