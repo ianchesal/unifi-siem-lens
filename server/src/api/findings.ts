@@ -14,11 +14,16 @@ export function createFindingsRouter(lensDb: LensDb): Router {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     // Default view excludes dismissed/resolved findings — with new_source_ip a
     // permanent, never-auto-resolving trigger, an unfiltered list only grows.
-    // Callers that explicitly want dismissed/resolved rows can ask via ?status=.
+    // Callers that explicitly want dismissed/resolved rows can ask via ?status=,
+    // or ?status=all for every finding regardless of status.
     res.json(
       listFindings(
         lensDb,
-        status ? { status: status as never } : { excludeStatuses: ['dismissed', 'resolved'] }
+        status === 'all'
+          ? {}
+          : status
+            ? { status: status as never }
+            : { excludeStatuses: ['dismissed', 'resolved'] }
       )
     );
   });

@@ -48,13 +48,26 @@ function relativeTime(iso: string | undefined): string | null {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+const STATUS_TABS = [
+  { key: 'active', label: 'Active' },
+  { key: 'new', label: 'New' },
+  { key: 'acknowledged', label: 'Acknowledged' },
+  { key: 'dismissed', label: 'Dismissed' },
+  { key: 'resolved', label: 'Resolved' },
+  { key: 'all', label: 'All' },
+] as const;
+
+type StatusTab = (typeof STATUS_TABS)[number]['key'];
+
 export function FindingsList({ refreshKey }: { refreshKey: number }) {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [requests, setRequests] = useState<Record<number, AnalysisRequest[]>>({});
   const [error, setError] = useState<string | null>(null);
+  const [statusTab, setStatusTab] = useState<StatusTab>('active');
 
   const load = () => {
-    fetchJson<Finding[]>('/api/findings')
+    const query = statusTab === 'active' ? '' : `?status=${statusTab}`;
+    fetchJson<Finding[]>(`/api/findings${query}`)
       .then(async (fs) => {
         setFindings(fs);
         const entries = await Promise.all(
@@ -66,7 +79,7 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey drives a manual reload, not a data dependency
-  useEffect(load, [refreshKey]);
+  useEffect(load, [refreshKey, statusTab]);
 
   const setStatus = async (id: number, status: 'acknowledged' | 'dismissed') => {
     await fetch(`/api/findings/${id}/status`, {
@@ -77,24 +90,50 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
     load();
   };
 
+  const requestAnalysis = (id: number) => fetch(`/api/findings/${id}/analyze`, { method: 'POST' });
+
   const analyze = async (id: number) => {
-    await fetch(`/api/findings/${id}/analyze`, { method: 'POST' });
+    await requestAnalysis(id);
     load();
   };
 
   const sorted = [...findings].sort((a, b) => b.severity_score - a.severity_score);
+  const analyzable = sorted.filter((f) => !(requests[f.id] ?? []).some((r) => r.status === 'pending'));
+
+  const analyzeAll = async () => {
+    await Promise.all(analyzable.map((f) => requestAnalysis(f.id)));
+    load();
+  };
 
   return (
     <div className="section">
       <div className="section-head">
         <h2 className="section-title">Findings</h2>
-        <span className="section-count">
-          {sorted.length} shown{sorted.length > 0 ? ' · sorted by severity' : ''}
-        </span>
+        <div className="section-head-right">
+          <span className="section-count">
+            {sorted.length} shown{sorted.length > 0 ? ' · sorted by priority' : ''}
+          </span>
+          <button className="btn btn-ghost" type="button" disabled={analyzable.length === 0} onClick={analyzeAll}>
+            Analyze all{analyzable.length > 0 ? ` (${analyzable.length})` : ''}
+          </button>
+        </div>
+      </div>
+
+      <div className="status-tabs">
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={`status-tab${statusTab === tab.key ? ' is-active' : ''}`}
+            onClick={() => setStatusTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {error && <p style={{ color: 'var(--critical)' }}>{error}</p>}
-      {!error && sorted.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>No open findings.</p>}
+      {!error && sorted.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>No findings in this view.</p>}
 
       <div className="findings-list">
         {sorted.map((f) => {
@@ -118,7 +157,7 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
                 </div>
                 <span className={`severity-chip ${band}`}>
                   {band !== 'low' && <SeverityIcon />}
-                  Severity {f.severity_score}
+                  Priority {f.severity_score}
                 </span>
               </div>
 
@@ -152,7 +191,7 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
                 <span className="spacer" />
                 {seenAgo && <span className="timestamp">first seen {seenAgo}</span>}
                 <button className="btn btn-primary" type="button" disabled={!!pending} onClick={() => analyze(f.id)}>
-                  {pending ? 'Analysis pending…' : 'Analyze this'}
+                  {pending ? 'Analysis pending…' : answered ? 'Re-analyze' : 'Analyze this'}
                 </button>
               </div>
 

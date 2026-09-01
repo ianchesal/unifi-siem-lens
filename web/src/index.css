@@ -239,10 +239,39 @@ button {
   margin: 0;
   letter-spacing: -0.2px;
 }
+.section-head-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .section-count {
   font-size: 13px;
   color: var(--text-muted);
   font-family: var(--mono);
+}
+
+.status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 16px;
+}
+.status-tab {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.status-tab:hover {
+  border-color: var(--border-strong);
+}
+.status-tab.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* KPI tiles */

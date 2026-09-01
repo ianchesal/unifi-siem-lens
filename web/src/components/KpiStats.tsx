@@ -65,7 +65,7 @@ export function KpiStats({ refreshKey }: { refreshKey: number }) {
         icon={<path d="M4 5h16M4 12h16M4 19h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />}
       />
       <KpiCard
-        label="Critical severity"
+        label="Critical priority"
         value={critical}
         iconBg="var(--critical-soft)"
         iconColor="#f28c88"
