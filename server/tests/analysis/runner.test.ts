@@ -259,8 +259,10 @@ describe('runRuleTriageBackfill', () => {
   });
 
   it('dismisses an existing new finding whose window-scoped events all match a rule, and reports counts', () => {
-    const firstSeen = '2026-08-20T00:00:00Z';
+    const firstSeen = '2026-08-20T12:00:00Z';
     const sinkDb = seededSinkDb([
+      // Before first_seen, inside [first_seen - 24h, first_seen) — first_seen is stamped
+      // with the detection *run* time, at the end of the trailing window, not the start.
       { received_at: '2026-08-20T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '203.0.113.5', action: 'blocked' },
     ]);
     const lensDb = openLensDb(':memory:');
@@ -299,14 +301,14 @@ describe('runRuleTriageBackfill', () => {
   });
 
   it('re-processes a finding that already has an AI-answered analysis request', () => {
-    const firstSeen = '2026-08-20T00:00:00Z';
+    const firstSeen = '2026-08-20T12:00:00Z';
     const sinkDb = seededSinkDb([
       { received_at: '2026-08-20T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '203.0.113.7', action: 'blocked' },
     ]);
     const lensDb = openLensDb(':memory:');
     const finding = upsertFinding(lensDb, applyTrigger(null, 'new_source_ip', firstSeen, 'source_ip', '203.0.113.7'));
-    const aiRequest = createAnalysisRequest(lensDb, finding.id as number, {}, '2026-08-20T02:00:00Z');
-    submitAnalysis(lensDb, aiRequest.id, 'looked benign to Claude', 'low', '2026-08-20T02:05:00Z');
+    const aiRequest = createAnalysisRequest(lensDb, finding.id as number, {}, '2026-08-20T13:00:00Z');
+    submitAnalysis(lensDb, aiRequest.id, 'looked benign to Claude', 'low', '2026-08-20T13:05:00Z');
 
     const result = runRuleTriageBackfill(deps(sinkDb, lensDb));
 
@@ -317,12 +319,12 @@ describe('runRuleTriageBackfill', () => {
     expect(requests.some((r) => r.source === 'rule')).toBe(true);
   });
 
-  it('anchors the completeness window to the finding\'s first_seen, not to now', () => {
-    const firstSeen = '2026-08-20T00:00:00Z';
+  it('anchors the completeness window to [first_seen - 24h, first_seen), not to now', () => {
+    const firstSeen = '2026-08-20T12:00:00Z';
     const sinkDb = seededSinkDb([
       { received_at: '2026-08-20T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '203.0.113.9', action: 'blocked' },
-      // Outside the [first_seen, first_seen+24h) window and non-matching — must not
-      // count toward `total`, or the completeness check would wrongly fail.
+      // Outside the [first_seen - 24h, first_seen) window (it's after first_seen) and
+      // non-matching — must not count toward `total`, or completeness would wrongly fail.
       { received_at: '2026-09-01T00:00:00Z', category: 'ips_alert', signature: 'ET MALWARE Bar', source_ip: '203.0.113.9', action: 'blocked' },
     ]);
     const lensDb = openLensDb(':memory:');

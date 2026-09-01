@@ -381,12 +381,16 @@ export interface BackfillResult {
 // before it was configured) — the live path only ever evaluates a finding at
 // the moment it's created, so anything already sitting in the findings table
 // as 'new'/'acknowledged' never gets a rule pass otherwise. Re-checks every
-// such finding against the same three rules, anchoring each finding's
-// completeness window to its own first_seen (not "now") so the verdict
-// matches what the live path would have produced had rule-triage existed at
-// detection time. Runs against every candidate finding regardless of
-// whether it already has an AI-answered analysis request — a rule match adds
-// a second, rule-sourced request and dismisses the finding either way.
+// such finding against the same three rules, reproducing the live path's own
+// window relative to `first_seen`: `first_seen` is stamped with the
+// detection *run* time (`nowIso` in runHourlyChecks), sitting at the *end*
+// of the trailing 24h window the live path scanned, not the start — the
+// underlying events that triggered detection are all *before* first_seen,
+// not after it. So the backfill window is `[first_seen - 24h, first_seen)`,
+// not `[first_seen, first_seen + 24h)`. Runs against every candidate finding
+// regardless of whether it already has an AI-answered analysis request — a
+// rule match adds a second, rule-sourced request and dismisses the finding
+// either way.
 export function runRuleTriageBackfill(deps: RunnerDeps): BackfillResult {
   const nowIso = new Date().toISOString();
   const result: BackfillResult = {
@@ -401,10 +405,11 @@ export function runRuleTriageBackfill(deps: RunnerDeps): BackfillResult {
 
   for (const finding of candidates) {
     result.checked++;
-    const untilIso = new Date(
-      new Date(finding.first_seen).getTime() + NEW_ENTITY_WINDOW_HOURS * 3600 * 1000
+    const untilIso = finding.first_seen;
+    const sinceIso = new Date(
+      new Date(finding.first_seen).getTime() - NEW_ENTITY_WINDOW_HOURS * 3600 * 1000
     ).toISOString();
-    const outcome = tryRuleTriage(deps, finding, finding.first_seen, nowIso, untilIso);
+    const outcome = tryRuleTriage(deps, finding, sinceIso, nowIso, untilIso);
     if (outcome.matched && outcome.rule) {
       result.dismissed++;
       result.byRule[outcome.rule]++;
