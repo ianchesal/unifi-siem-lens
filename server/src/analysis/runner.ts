@@ -5,20 +5,35 @@ import {
   listFindings,
   markSeenSignature,
   markSeenSourceIp,
+  setFindingStatus,
   upsertFinding,
 } from '../db/findingsStore.js';
+import { createAnsweredRuleAnalysis } from '../db/analysisRequestsStore.js';
 import type { LensDb } from '../db/lensDb.js';
 import type { SinkDb } from '../db/sinkDb.js';
+import {
+  auditCandidateEvents,
+  signatureEventCounts,
+  sourceIpEventCounts,
+} from '../db/sinkQueries.js';
 import { computeBaseline, isAnomalous } from './baseline.js';
 import { isInternalSource } from './cidr.js';
-import { applyTrigger, reevaluateTrigger } from './findings.js';
-import { detectNewSignatures, detectNewSourceIps, signatureKey } from './newEntity.js';
+import { applyTrigger, reevaluateTrigger, type Finding } from './findings.js';
+import { detectNewSignatures, detectNewSourceIps, signatureKey, splitSignatureKey } from './newEntity.js';
+import {
+  NON_SECURITY_OPERATIONAL_CATEGORIES,
+  tryAdminAuditLoginRule,
+  tryOperationalNoiseRule,
+  tryReputationBlocklistRule,
+} from './ruleTriage.js';
 import { isSustained, REPEAT_OFFENDER_WINDOW_DAYS } from './repeatOffender.js';
 
 export interface RunnerDeps {
   sinkDb: SinkDb;
   lensDb: LensDb;
   lanCidrs: string[];
+  trustedAdminNames: string[];
+  safeSignaturePrefixes: string[];
 }
 
 const NEW_ENTITY_WINDOW_HOURS = 24;
@@ -48,6 +63,64 @@ function runCheck(name: string, fn: () => number): number {
   }
 }
 
+// Attempts rule-based auto-triage for a just-created/updated new_signature or
+// new_source_ip finding. Fires at most one rule (admin login, then
+// operational noise, then reputation blocklist — first match wins) and, on a
+// match, writes an already-answered analysis_requests row and dismisses the
+// finding directly. No-op (returns without touching the finding) if no rule
+// fully explains every event behind it.
+function tryRuleTriage(deps: RunnerDeps, finding: Finding, sinceIso: string, nowIso: string): void {
+  const prefixClause = deps.safeSignaturePrefixes.map(() => 'signature LIKE ?').join(' OR ');
+  const prefixParams = deps.safeSignaturePrefixes.map((p) => `${p}%`);
+
+  let verdict: ReturnType<typeof tryAdminAuditLoginRule> = null;
+
+  if (finding.entity_type === 'source_ip') {
+    const auditEvents = auditCandidateEvents(deps.sinkDb, finding.entity_key, sinceIso);
+    verdict = tryAdminAuditLoginRule(auditEvents, deps.trustedAdminNames);
+
+    if (!verdict) {
+      const opCounts = sourceIpEventCounts(
+        deps.sinkDb,
+        finding.entity_key,
+        sinceIso,
+        `category IN (${NON_SECURITY_OPERATIONAL_CATEGORIES.map(() => '?').join(',')})`,
+        NON_SECURITY_OPERATIONAL_CATEGORIES
+      );
+      verdict = tryOperationalNoiseRule(opCounts);
+    }
+
+    if (!verdict && prefixClause) {
+      const blockCounts = sourceIpEventCounts(
+        deps.sinkDb,
+        finding.entity_key,
+        sinceIso,
+        `category = 'ips_alert' AND action = 'blocked' AND (${prefixClause})`,
+        prefixParams
+      );
+      verdict = tryReputationBlocklistRule(blockCounts);
+    }
+  } else {
+    const { category, signature } = splitSignatureKey(finding.entity_key);
+    if (category === 'ips_alert' && prefixClause) {
+      const blockCounts = signatureEventCounts(
+        deps.sinkDb,
+        category,
+        signature,
+        sinceIso,
+        `action = 'blocked' AND (${prefixClause})`,
+        prefixParams
+      );
+      verdict = tryReputationBlocklistRule(blockCounts);
+    }
+  }
+
+  if (!verdict) return;
+
+  createAnsweredRuleAnalysis(deps.lensDb, finding.id as number, { finding }, verdict.recommendation, verdict.riskLevel, nowIso);
+  setFindingStatus(deps.lensDb, finding.id as number, 'dismissed');
+}
+
 export function runHourlyChecks(
   deps: RunnerDeps,
   now: Date = new Date()
@@ -67,7 +140,7 @@ export function runHourlyChecks(
     );
     for (const { category, signature } of detectNewSignatures(events, seenSigSet)) {
       const existing = getFinding(deps.lensDb, 'signature', signatureKey(category, signature));
-      upsertFinding(
+      const finding = upsertFinding(
         deps.lensDb,
         applyTrigger(
           existing,
@@ -78,6 +151,7 @@ export function runHourlyChecks(
         )
       );
       markSeenSignature(deps.lensDb, category, signature, nowIso);
+      tryRuleTriage(deps, finding, sinceIso, nowIso);
       count++;
     }
     return count;
@@ -92,8 +166,9 @@ export function runHourlyChecks(
     );
     for (const ip of detectNewSourceIps(events, seenIpSet)) {
       const existing = getFinding(deps.lensDb, 'source_ip', ip);
-      upsertFinding(deps.lensDb, applyTrigger(existing, 'new_source_ip', nowIso, 'source_ip', ip));
+      const finding = upsertFinding(deps.lensDb, applyTrigger(existing, 'new_source_ip', nowIso, 'source_ip', ip));
       markSeenSourceIp(deps.lensDb, ip, nowIso);
+      tryRuleTriage(deps, finding, sinceIso, nowIso);
       count++;
     }
     return count;

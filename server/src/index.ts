@@ -31,7 +31,15 @@ try {
 }
 
 const lensDb = openLensDb(config.lensDbPath);
-const runnerDeps: RunnerDeps | null = sinkDb ? { sinkDb, lensDb, lanCidrs: config.lanCidrs } : null;
+const runnerDeps: RunnerDeps | null = sinkDb
+  ? {
+      sinkDb,
+      lensDb,
+      lanCidrs: config.lanCidrs,
+      trustedAdminNames: config.trustedAdminNames,
+      safeSignaturePrefixes: config.safeSignaturePrefixes,
+    }
+  : null;
 
 function runChecksSafely(): void {
   if (!runnerDeps) {
