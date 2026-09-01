@@ -171,6 +171,26 @@ npm test          # server test suite (vitest)
 npm run lint       # biome (server) + oxlint (web)
 ```
 
+## Cutting a release
+
+Releases are tag-driven. Pushing a `v*` tag to GitHub triggers
+`.github/workflows/release.yml`, which:
+- Builds and pushes a Docker image to `ghcr.io/ianchesal/unifi-siem-lens`
+  (tagged `latest`, `{major}.{minor}`, and `{version}`)
+- Creates a GitHub Release with auto-generated notes
+
+**Steps to release:**
+
+1. Ensure all changes are merged to `main` and CI is green.
+2. Decide the new version (follows semver: `MAJOR.MINOR.PATCH`).
+3. Update `"version"` in `package.json` (root) to the new version.
+4. Commit: `git commit -m "chore: release v{version}" package.json`
+5. Tag: `git tag v{version}`
+6. Push both: `git push origin main && git push origin v{version}`
+
+The release workflow fires automatically on the tag push. No manual Docker
+build or GitHub Release creation needed.
+
 ## License
 
 [MIT](LICENSE)
