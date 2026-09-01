@@ -71,7 +71,11 @@ and a SQL predicate fragment per rule, and return `{ total, matching }`.
    non-security set (`internet_and_wan` today). These categories describe
    device/WAN health, not intrusion activity, so a `new_source_ip` finding
    triggered by (for example) the gateway's own IP appearing on a
-   high-latency log line has nothing security-relevant to say.
+   high-latency log line has nothing security-relevant to say. This rule is
+   deliberately scoped to `source_ip` findings only, not `signature`
+   findings — in practice, operational/WAN-health events don't carry an IDS
+   signature, so a `new_signature` finding is never a candidate for this
+   rule regardless.
 3. **Reputation/blocklist scan** — every event has `category='ips_alert'`,
    `action='blocked'`, and a `signature` starting with one of
    `SAFE_SIGNATURE_PREFIXES` (env-configurable; defaults to `ET DROP`,
