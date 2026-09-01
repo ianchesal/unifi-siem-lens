@@ -26,6 +26,6 @@ LAN dashboard, not an oversight. The `/mcp` endpoint is the exception: it
 requires an `Authorization: Bearer <MCP_SECRET>` header, matching its
 sibling projects — protect your `MCP_SECRET` and do not expose it. The
 server binds to `127.0.0.1` by default; only widen `HOST` (or a Docker
-port publish) deliberately, and never expose port 3100 to the internet.
+port publish) deliberately, and never expose port 3002 to the internet.
 This service also opens the sibling `unifi-siem-sink` project's database
 **read-only** and never writes to it.

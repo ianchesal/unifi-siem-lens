@@ -17,7 +17,7 @@ describe('loadConfig', () => {
     delete process.env.LAN_CIDRS;
     delete process.env.PORT;
     const config = loadConfig();
-    expect(config.port).toBe(3100);
+    expect(config.port).toBe(3002);
     expect(config.host).toBe('127.0.0.1');
     expect(config.lanCidrs).toEqual([]);
     expect(config.unifiMcpServerUrl).toBeNull();

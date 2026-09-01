@@ -42,7 +42,7 @@ export function loadConfig(): Config {
     .filter(Boolean);
 
   return {
-    port: parseIntEnv('PORT', 3100),
+    port: parseIntEnv('PORT', 3002),
     host: process.env.HOST ?? '127.0.0.1',
     sinkDbPath: process.env.SINK_DB_PATH,
     lensDbPath: process.env.LENS_DB_PATH ?? './data/lens.db',

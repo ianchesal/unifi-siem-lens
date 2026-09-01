@@ -57,7 +57,7 @@ uses internally — see step 2.
 docker run -d \
   --name unifi-siem-lens \
   --env-file .env \
-  -p 3100:3100 \
+  -p 3002:3002 \
   -v unifi-siem-lens-data:/lens-data \
   --volumes-from unifi-siem-sink:ro \
   ghcr.io/ianchesal/unifi-siem-lens:latest
@@ -71,7 +71,7 @@ project name, adjust `unifi-siem-sink` above to match.
 
 ### 3. Open the dashboard
 
-`http://<homelab-ip>:3100`
+`http://<homelab-ip>:3002`
 
 ### 4. Add to Claude Code for the analysis handoff
 
@@ -80,7 +80,7 @@ project name, adjust `unifi-siem-sink` above to match.
   "mcpServers": {
     "unifi-siem-lens": {
       "type": "http",
-      "url": "http://<homelab-ip>:3100/mcp",
+      "url": "http://<homelab-ip>:3002/mcp",
       "headers": { "Authorization": "Bearer <your-MCP_SECRET>" }
     }
   }
@@ -108,7 +108,7 @@ recommendations back — which then show up next to the finding.
 |---|---|---|---|
 | `SINK_DB_PATH` | yes | — | Path to `unifi-siem-sink`'s `events.db`, opened read-only |
 | `MCP_SECRET` | yes | — | Bearer token clients must send as `Authorization: Bearer <MCP_SECRET>` to call `/mcp` |
-| `PORT` | no | `3100` | Port the dashboard/API/MCP server listens on |
+| `PORT` | no | `3002` | Port the dashboard/API/MCP server listens on |
 | `HOST` | no | `127.0.0.1` | Bind address. Defaults to localhost-only — the dashboard/REST API have no authentication of their own (only `/mcp` does, via `MCP_SECRET`), so widen this deliberately (e.g. to your LAN interface IP, or `0.0.0.0`) only if you want the dashboard reachable from other devices |
 | `LENS_DB_PATH` | no | `./data/lens.db` (`/lens-data/lens.db` in Docker) | Lens's own SQLite store — findings, baselines, seen-entity tracking, analysis-request queue |
 | `LAN_CIDRS` | no | *(none)* | Comma-separated CIDRs treated as internal/LAN for the internal-source heuristic, e.g. `10.0.0.0/8,192.168.0.0/16` |
@@ -136,7 +136,7 @@ cp server/.env.example server/.env
 docker compose up -d --build
 ```
 
-Exposes `3100/tcp` for the dashboard/API/MCP endpoint. Requires
+Exposes `3002/tcp` for the dashboard/API/MCP endpoint. Requires
 `unifi-siem-sink` running as a container named `unifi-siem-sink` (adjust
 `docker-compose.yml`'s `volumes_from` if yours is named differently) —
 lens's own state persists in the `lens-data` named volume.
@@ -147,9 +147,9 @@ lens's own state persists in the `lens-data` named volume.
 npm run dev
 ```
 
-Starts the server (`http://localhost:3100`) and the Vite dev server
+Starts the server (`http://localhost:3002`) and the Vite dev server
 (`http://localhost:5173`, proxying `/api` to the server) together. The
-server's `/mcp` endpoint is served directly on port 3100 and is not
+server's `/mcp` endpoint is served directly on port 3002 and is not
 proxied through Vite.
 
 > **Note:** If `npm run dev -w server` fails to boot (a known issue on
@@ -165,7 +165,7 @@ npm start
 ```
 
 Builds both packages and serves the built dashboard + API + MCP endpoint
-from a single process on `PORT` (default `3100`).
+from a single process on `PORT` (default `3002`).
 
 ### Tests
 

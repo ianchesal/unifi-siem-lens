@@ -5,7 +5,7 @@ import type { SinkDb } from '../src/db/sinkDb.js';
 import { createApp } from '../src/server.js';
 
 const baseConfig = {
-  port: 3100,
+  port: 3002,
   host: '127.0.0.1',
   sinkDbPath: '/dev/null',
   lensDbPath: ':memory:',

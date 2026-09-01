@@ -4,7 +4,7 @@ services:
     image: unifi-siem-lens:latest
     restart: unless-stopped
     ports:
-      - "3100:3100"
+      - "3002:3002"
     env_file:
       - .env
     volumes:
@@ -18,7 +18,7 @@ services:
     volumes_from:
       - container:unifi-siem-sink:ro
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3100/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/health"]
       interval: 30s
       timeout: 5s
       retries: 3
