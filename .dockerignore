@@ -1,0 +1,12 @@
+node_modules
+server/node_modules
+web/node_modules
+server/dist
+web/dist
+.env
+server/.env
+server/data
+coverage
+.git
+.superpowers
+docs/superpowers/plans

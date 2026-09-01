@@ -1,0 +1,28 @@
+services:
+  unifi-siem-lens:
+    build: .
+    image: unifi-siem-lens:latest
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    env_file:
+      - .env
+    volumes:
+      - lens-data:/lens-data
+    # Shares the sink container's /data volume (containing events.db) into
+    # this container read-only, at the same path. Requires unifi-siem-sink
+    # to already be running under this exact container name — if yours is
+    # named differently (check with `docker ps`, or if you run the sink via
+    # `docker compose` under a different project name), update the name
+    # below and set SINK_DB_PATH in .env to match the sink's DB_PATH.
+    volumes_from:
+      - container:unifi-siem-sink:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3100/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  lens-data:

@@ -9,6 +9,7 @@ data/
 *.db-shm
 *.db-wal
 *.db-journal
-docs/superpowers/
+docs/superpowers/plans/
+.superpowers/
 spec-review.md
 /PROMPT.md
