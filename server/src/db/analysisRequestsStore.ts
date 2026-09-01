@@ -7,6 +7,7 @@ export interface AnalysisRequestRow {
   context: string;
   recommendation: string | null;
   risk_level: string | null;
+  source: 'ai' | 'rule';
   created_at: string;
   answered_at: string | null;
 }
@@ -24,8 +25,8 @@ export function createAnalysisRequest(
 
   const result = db.conn
     .prepare(
-      `INSERT INTO analysis_requests (finding_id, status, context, created_at)
-       VALUES (?, 'pending', ?, ?)`
+      `INSERT INTO analysis_requests (finding_id, status, context, source, created_at)
+       VALUES (?, 'pending', ?, 'ai', ?)`
     )
     .run(findingId, JSON.stringify(context), now);
   return getAnalysisRequest(db, Number(result.lastInsertRowid)) as AnalysisRequestRow;
@@ -69,4 +70,21 @@ export function submitAnalysis(
     )
     .run(recommendation, riskLevel, now, id);
   return getAnalysisRequest(db, id) as AnalysisRequestRow;
+}
+
+export function createAnsweredRuleAnalysis(
+  db: LensDb,
+  findingId: number,
+  context: object,
+  recommendation: string,
+  riskLevel: string,
+  now: string
+): AnalysisRequestRow {
+  const result = db.conn
+    .prepare(
+      `INSERT INTO analysis_requests (finding_id, status, context, recommendation, risk_level, source, created_at, answered_at)
+       VALUES (?, 'answered', ?, ?, ?, 'rule', ?, ?)`
+    )
+    .run(findingId, JSON.stringify(context), recommendation, riskLevel, now, now);
+  return getAnalysisRequest(db, Number(result.lastInsertRowid)) as AnalysisRequestRow;
 }

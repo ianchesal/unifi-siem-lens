@@ -4,6 +4,7 @@ import { upsertFinding } from '../../src/db/findingsStore.js';
 import { openLensDb } from '../../src/db/lensDb.js';
 import {
   createAnalysisRequest,
+  createAnsweredRuleAnalysis,
   getAnalysisRequestsForFinding,
   getPendingAnalysisRequests,
   submitAnalysis,
@@ -59,5 +60,30 @@ describe('analysisRequestsStore', () => {
     expect(results[0].status).toBe('answered');
     expect(results[0].recommendation).toBe('looks benign');
     expect(results[1].status).toBe('pending');
+  });
+
+  it('createAnsweredRuleAnalysis inserts an already-answered, rule-sourced request', () => {
+    const lensDb = openLensDb(':memory:');
+    const finding = upsertFinding(lensDb, applyTrigger(null, 'internal_source', 't0', 'source_ip', '1.2.3.4'));
+    const request = createAnsweredRuleAnalysis(
+      lensDb,
+      finding.id as number,
+      { finding },
+      'auto-dismissed: routine blocklist scan',
+      'low',
+      't1'
+    );
+    expect(request.status).toBe('answered');
+    expect(request.source).toBe('rule');
+    expect(request.recommendation).toBe('auto-dismissed: routine blocklist scan');
+    expect(request.risk_level).toBe('low');
+    expect(request.answered_at).toBe('t1');
+  });
+
+  it('createAnalysisRequest (AI path) still defaults source to ai', () => {
+    const lensDb = openLensDb(':memory:');
+    const finding = upsertFinding(lensDb, applyTrigger(null, 'internal_source', 't0', 'source_ip', '1.2.3.4'));
+    const request = createAnalysisRequest(lensDb, finding.id as number, {}, 't1');
+    expect(request.source).toBe('ai');
   });
 });
