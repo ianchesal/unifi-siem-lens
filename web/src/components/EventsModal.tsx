@@ -14,6 +14,12 @@ interface StoredEvent {
   raw: string;
 }
 
+const UNIFI_REFERENCE_RE = /(?:^|\s)UNIFIreference=(\S+)/;
+
+function extractUnifiReference(raw: string): string | null {
+  return raw.match(UNIFI_REFERENCE_RE)?.[1] ?? null;
+}
+
 export function EventsModal({ findingId, onClose }: { findingId: number; onClose: () => void }) {
   const [events, setEvents] = useState<StoredEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,25 +55,38 @@ export function EventsModal({ findingId, onClose }: { findingId: number; onClose
           {!error && events?.length === 0 && (
             <p style={{ color: 'var(--text-secondary)' }}>No raw events found.</p>
           )}
-          {events?.map((e) => (
-            <div key={e.id} className="event-card">
-              <div className="event-head">
-                <span className="timestamp">{new Date(e.received_at).toLocaleString()}</span>
-                {e.action && <span className={`event-action ${e.action}`}>{e.action}</span>}
-              </div>
-              {(e.source_ip || e.dest_ip) && (
-                <div className="event-flow">
-                  {e.source_ip ?? '—'} → {e.dest_ip ?? '—'}
+          {events?.map((e) => {
+            const reference = extractUnifiReference(e.raw);
+            return (
+              <div key={e.id} className="event-card">
+                <div className="event-head">
+                  <span className="timestamp">{new Date(e.received_at).toLocaleString()}</span>
+                  {e.action && <span className={`event-action ${e.action}`}>{e.action}</span>}
                 </div>
-              )}
-              {e.signature && <div className="event-signature">{e.signature}</div>}
-              {e.message && <p className="event-message">{e.message}</p>}
-              <details className="event-raw">
-                <summary>raw CEF</summary>
-                <pre>{e.raw}</pre>
-              </details>
-            </div>
-          ))}
+                {(e.source_ip || e.dest_ip) && (
+                  <div className="event-flow">
+                    {e.source_ip ?? '—'} → {e.dest_ip ?? '—'}
+                  </div>
+                )}
+                {e.signature && <div className="event-signature">{e.signature}</div>}
+                {e.message && <p className="event-message">{e.message}</p>}
+                {reference && (
+                  <a
+                    className="event-reference"
+                    href={reference}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Read reference ↗
+                  </a>
+                )}
+                <details className="event-raw">
+                  <summary>raw CEF</summary>
+                  <pre>{e.raw}</pre>
+                </details>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
