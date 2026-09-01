@@ -53,6 +53,10 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX idx_analysis_requests_status ON analysis_requests(status);
     `,
   },
+  {
+    version: 2,
+    sql: `ALTER TABLE analysis_requests ADD COLUMN source TEXT NOT NULL DEFAULT 'ai';`,
+  },
 ];
 
 export function openLensDb(path: string): LensDb {
