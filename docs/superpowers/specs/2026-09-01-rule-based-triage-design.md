@@ -68,12 +68,14 @@ and a SQL predicate fragment per rule, and return `{ total, matching }`.
    schema, not an oversight; a future structured `actor` column on `events`
    would let this rule drop the regex entirely.
 2. **Operational noise** — every event's `category` is in a fixed,
-   non-security set (`internet_and_wan` today). These categories describe
-   device/WAN health, not intrusion activity, so a `new_source_ip` finding
-   triggered by (for example) the gateway's own IP appearing on a
-   high-latency log line has nothing security-relevant to say. This rule is
-   deliberately scoped to `source_ip` findings only, not `signature`
-   findings — in practice, operational/WAN-health events don't carry an IDS
+   non-security set (`internet_and_wan`, `unifi_devices` today). These
+   categories describe device/WAN health, not intrusion activity, so a
+   `new_source_ip` finding triggered by (for example) the gateway's own IP
+   appearing on a high-latency log line, or an AP's IP appearing on a
+   channel-change/offline-online telemetry line, has nothing
+   security-relevant to say. This rule is deliberately scoped to
+   `source_ip` findings only, not `signature` findings — in practice,
+   operational/WAN-health and device-telemetry events don't carry an IDS
    signature, so a `new_signature` finding is never a candidate for this
    rule regardless.
 3. **Reputation/blocklist scan** — every event has `category='ips_alert'`,

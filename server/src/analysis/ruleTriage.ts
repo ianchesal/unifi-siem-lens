@@ -1,4 +1,4 @@
-export const NON_SECURITY_OPERATIONAL_CATEGORIES = ['internet_and_wan'];
+export const NON_SECURITY_OPERATIONAL_CATEGORIES = ['internet_and_wan', 'unifi_devices'];
 
 // Matches the sink's fixed audit-log template exactly (see
 // unifi-siem-sink's normalize.ts UNIFIcategory=Audit / "Network Accessed"

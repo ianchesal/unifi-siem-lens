@@ -93,4 +93,8 @@ describe('NON_SECURITY_OPERATIONAL_CATEGORIES', () => {
   it('includes internet_and_wan', () => {
     expect(NON_SECURITY_OPERATIONAL_CATEGORIES).toContain('internet_and_wan');
   });
+
+  it('includes unifi_devices', () => {
+    expect(NON_SECURITY_OPERATIONAL_CATEGORIES).toContain('unifi_devices');
+  });
 });
