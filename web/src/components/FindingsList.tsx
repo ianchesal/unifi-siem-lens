@@ -24,6 +24,7 @@ interface AnalysisRequest {
   status: 'pending' | 'answered';
   recommendation: string | null;
   risk_level: string | null;
+  source: 'ai' | 'rule';
   answered_at?: string | null;
 }
 
@@ -209,7 +210,10 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
                       Risk: {answered.risk_level ?? 'unknown'}
                     </span>
                     {relativeTime(answered.answered_at ?? undefined) && (
-                      <span className="analysis-source">via Claude Code · submitted {relativeTime(answered.answered_at ?? undefined)}</span>
+                      <span className="analysis-source">
+                        {answered.source === 'rule' ? 'auto-triaged by rule' : 'via Claude Code'} · submitted{' '}
+                        {relativeTime(answered.answered_at ?? undefined)}
+                      </span>
                     )}
                   </div>
                   <p className="analysis-body">{answered.recommendation}</p>
