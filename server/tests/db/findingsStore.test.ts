@@ -6,6 +6,7 @@ import {
   hasSeenSourceIp,
   listFindings,
   markSeenSourceIp,
+  setFindingStatus,
   upsertFinding,
 } from '../../src/db/findingsStore.js';
 
@@ -37,5 +38,18 @@ describe('findingsStore', () => {
     markSeenSourceIp(db, '1.1.1.1', 't0');
     expect(hasSeenSourceIp(db, '1.1.1.1')).toBe(true);
     db.close();
+  });
+
+  it('setFindingStatus updates status and returns the updated finding', () => {
+    const db = openLensDb(':memory:');
+    const finding = upsertFinding(db, applyTrigger(null, 'internal_source', 't0', 'source_ip', '9.9.9.9'));
+    const updated = setFindingStatus(db, finding.id as number, 'dismissed');
+    expect(updated?.status).toBe('dismissed');
+    expect(getFinding(db, 'source_ip', '9.9.9.9')?.status).toBe('dismissed');
+  });
+
+  it('setFindingStatus returns null for a nonexistent finding id', () => {
+    const db = openLensDb(':memory:');
+    expect(setFindingStatus(db, 999, 'dismissed')).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { listFindings } from '../db/findingsStore.js';
+import { listFindings, setFindingStatus } from '../db/findingsStore.js';
 import type { LensDb } from '../db/lensDb.js';
 
 const StatusUpdate = z.object({
@@ -29,14 +29,12 @@ export function createFindingsRouter(lensDb: LensDb): Router {
       res.status(400).json({ error: 'status must be "acknowledged" or "dismissed"' });
       return;
     }
-    const row = lensDb.conn
-      .prepare('UPDATE findings SET status = ? WHERE id = ? RETURNING *')
-      .get(parsed.data.status, Number(req.params.id));
-    if (!row) {
+    const updated = setFindingStatus(lensDb, Number(req.params.id), parsed.data.status);
+    if (!updated) {
       res.status(404).json({ error: 'finding not found' });
       return;
     }
-    res.json({ ...row, triggers: JSON.parse((row as { triggers: string }).triggers) });
+    res.json(updated);
   });
 
   return router;

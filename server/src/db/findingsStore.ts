@@ -60,6 +60,13 @@ export function upsertFinding(db: LensDb, finding: Finding): Finding {
   return getFinding(db, finding.entity_type, finding.entity_key) as Finding;
 }
 
+export function setFindingStatus(db: LensDb, id: number, status: FindingStatus): Finding | null {
+  const row = db.conn
+    .prepare('UPDATE findings SET status = ? WHERE id = ? RETURNING *')
+    .get(status, id) as FindingRow | undefined;
+  return row ? rowToFinding(row) : null;
+}
+
 export function listFindings(
   db: LensDb,
   opts: { status?: FindingStatus; excludeStatuses?: FindingStatus[] } = {}
