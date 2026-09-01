@@ -81,8 +81,10 @@ function tryRuleTriage(deps: RunnerDeps, finding: Finding, sinceIso: string, now
   let verdict: ReturnType<typeof tryAdminAuditLoginRule> = null;
 
   if (finding.entity_type === 'source_ip') {
-    const auditEvents = auditCandidateEvents(deps.sinkDb, finding.entity_key, sinceIso);
-    verdict = tryAdminAuditLoginRule(auditEvents, deps.trustedAdminNames);
+    if (deps.trustedAdminNames.length > 0) {
+      const auditEvents = auditCandidateEvents(deps.sinkDb, finding.entity_key, sinceIso);
+      verdict = tryAdminAuditLoginRule(auditEvents, deps.trustedAdminNames);
+    }
 
     if (!verdict) {
       const opCounts = sourceIpEventCounts(

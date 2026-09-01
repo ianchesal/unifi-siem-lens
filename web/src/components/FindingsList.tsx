@@ -99,7 +99,7 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
   };
 
   const sorted = [...findings].sort((a, b) => b.severity_score - a.severity_score);
-  const analyzable = sorted.filter((f) => !(requests[f.id] ?? []).some((r) => r.status === 'pending'));
+  const analyzable = sorted.filter((f) => (requests[f.id] ?? []).length === 0);
 
   const analyzeAll = async () => {
     await Promise.all(analyzable.map((f) => requestAnalysis(f.id)));

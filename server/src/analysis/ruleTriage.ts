@@ -58,7 +58,7 @@ export function tryReputationBlocklistRule(counts: EntityEventCounts): TriageVer
   if (!isComplete(counts)) return null;
   return {
     recommendation:
-      'Every event behind this finding is a blocked hit from a known reputation/blocklist IDS/IPS rule (ET DROP/CINS/TOR/COMPROMISED/DSHIELD family) with no bytes received. Routine untargeted scanning, already blocked. Auto-dismissed by rule.',
+      'Every event behind this finding is a blocked hit from a known reputation/blocklist IDS/IPS rule (ET DROP/CINS/TOR/COMPROMISED/DSHIELD family). Routine untargeted scanning, already blocked. Auto-dismissed by rule.',
     riskLevel: 'low',
   };
 }

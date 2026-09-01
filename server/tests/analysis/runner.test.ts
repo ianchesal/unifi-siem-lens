@@ -123,6 +123,14 @@ describe('rule-based triage', () => {
     expect(requests[0].source).toBe('rule');
     expect(requests[0].status).toBe('answered');
     expect(requests[0].risk_level).toBe('low');
+
+    const sigFinding = listFindings(lensDb, { status: 'dismissed' }).find(
+      (f) => f.entity_key === 'ips_alert|ET DROP Dshield Block Listed Source group 1'
+    );
+    expect(sigFinding).toBeDefined();
+    const sigRequests = getAnalysisRequestsForFinding(lensDb, sigFinding?.id as number);
+    expect(sigRequests).toHaveLength(1);
+    expect(sigRequests[0].source).toBe('rule');
   });
 
   it('does not auto-dismiss a signature outside the safe-prefix list', () => {
@@ -231,5 +239,9 @@ describe('rule-based triage', () => {
     expect(finding?.status).toBe('new');
     expect(finding?.triggers.some((t) => t.type === 'internal_source' && t.active)).toBe(true);
     expect(finding?.triggers.some((t) => t.type === 'new_source_ip' && t.active)).toBe(true);
+
+    const ruleRequests = getAnalysisRequestsForFinding(lensDb, finding?.id as number).filter((r) => r.source === 'rule');
+    expect(ruleRequests).toHaveLength(1);
+    expect(ruleRequests[0].status).toBe('answered');
   });
 });
