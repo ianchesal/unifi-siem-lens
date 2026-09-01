@@ -31,6 +31,11 @@ UDM Pro:
   (running on your Claude subscription, no separate API key) checks in over
   MCP, reasons about the finding with the real events as context, and posts
   a recommendation back into the app.
+  A second, purely code-driven layer goes further for the common case: a
+  handful of rules (a trusted admin's own console login, WAN/operational
+  noise, a blocked hit from a known reputation/blocklist IDS signature)
+  auto-dismiss a finding the moment it's detected, with no Claude Code
+  session involved at all — see [Rule-based auto-triage](#rule-based-auto-triage) below.
 
 Run all three and an LLM gets full visibility into the network (via
 `unifi-mcp-server`), full visibility into the security event stream (via
@@ -98,11 +103,43 @@ recommendations back — which then show up next to the finding.
 
 | Surface | What it gives you |
 |---|---|
-| Dashboard (`/`) | Events-over-time, top signatures, top source IPs, and severity-distribution charts; a findings list with acknowledge/dismiss actions and an "Analyze this" button per finding. |
+| Dashboard (`/`) | Events-over-time, top signatures, top source IPs, and severity-distribution charts; a findings list with status tabs (Active/New/Acknowledged/Dismissed/Resolved/All), an "Analyze all" button, and per-finding Acknowledge/Dismiss/Analyze actions. Each answered finding shows whether its recommendation came "via Claude Code" or was "auto-triaged by rule". |
+| Admin (`/admin`) | One-off maintenance actions — currently just the rule-triage backfill (see below). |
 | `GET /health` | Liveness + sink DB / schema-contract status. |
+| `POST /api/admin/backfill-rule-triage` | Re-checks every existing `new`/`acknowledged` finding against the auto-triage rules; returns `{ checked, dismissed, byRule }`. |
 | `get_pending_analyses` (MCP) | List analysis requests queued from the dashboard, awaiting a recommendation. |
 | `get_analysis_context` (MCP) | Full context for one request: the finding, its trigger/baseline history, and the relevant raw events. |
 | `submit_analysis` (MCP) | Post a recommendation + risk level back for a pending request. |
+
+## Rule-based auto-triage
+
+Most findings a live network throws off don't need an LLM at all: your own
+console logins, the gateway's WAN-health blips, and routine reputation-list
+scans that UniFi already auto-blocked. Rather than queuing every one of
+these for a Claude Code session, lens checks each new `new_signature`/
+`new_source_ip` finding against three rules the moment it's detected, and
+auto-dismisses it — with a canned, code-generated recommendation, no
+Claude Code session involved — if every event behind it is fully explained
+by one of them:
+
+1. **Trusted admin login** — a console login from an admin name in
+   `TRUSTED_ADMIN_NAMES` (see [Environment Variables](#environment-variables) below; empty by default, so this rule never fires unconfigured).
+2. **Operational noise** — WAN/device-health telemetry, not a security
+   signal.
+3. **Reputation/blocklist scan** — a blocked hit from a known
+   reputation-feed IDS signature family (`SAFE_SIGNATURE_PREFIXES`).
+
+A finding that isn't *fully* explained by a rule (mixed events, an
+unrecognized signature, an untrusted admin name) is left alone exactly as
+before — it still needs a manual "Analyze this" and a Claude Code session.
+
+Because this only runs at the moment a finding is first created, findings
+already sitting in the database before you configure `TRUSTED_ADMIN_NAMES`
+(or before you upgrade to a lens version that has this feature) never get a
+rule pass on their own. Visit **`/admin`** and click **Run backfill** to
+sweep the auto-triage rules over your existing `new`/`acknowledged`
+findings — safe to run repeatedly, it only ever touches findings still
+sitting at those two statuses.
 
 ## Environment Variables
 

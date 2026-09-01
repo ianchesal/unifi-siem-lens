@@ -19,11 +19,20 @@ with `unifi-mcp-server` (rest of the UniFi Network API) and
 `unifi-siem-sink` (the event source); this project adds no new UniFi API
 coverage, only analysis on top of what the sink already collects.
 
+A second, purely code-driven layer complements the Claude Code handoff: a
+small set of rules (trusted-admin console logins, WAN/operational noise,
+blocked reputation-blocklist IDS hits) auto-dismiss a finding the moment
+it's detected, with no Claude Code session ever involved, for the cases
+where the verdict is mechanical rather than something worth an LLM's
+attention.
+
 See `docs/superpowers/specs/2026-08-31-lens-design.md` for the full design
 spec (architecture rationale, trigger/finding lifecycle rules, and the
-decisions behind the analysis heuristics) — it is not gitignored from the
-published repo the way `docs/superpowers/` normally would be, since it's
-the primary architecture reference for this project going forward.
+decisions behind the analysis heuristics), and
+`docs/superpowers/specs/2026-09-01-rule-based-triage-design.md` for the
+rule-based auto-triage layer specifically — both are not gitignored from
+the published repo the way `docs/superpowers/` normally would be, since
+they're the primary architecture reference for this project going forward.
 
 ## Commands
 
@@ -113,6 +122,54 @@ lookup via `unifi-mcp-server`. `get_pending_analyses` / `get_analysis_context`
 / `submit_analysis` are the three MCP tools a Claude Code session drives;
 `submit_analysis` throws on an already-answered or nonexistent request
 rather than silently overwriting.
+
+`analysis_requests.source` (`'ai' | 'rule'`, default `'ai'` at the DB
+level) distinguishes a Claude Code-authored recommendation from one the
+rule engine below wrote directly — the dashboard's analysis panel surfaces
+this ("via Claude Code" vs "auto-triaged by rule"). Rule-sourced rows are
+inserted already `answered`; they never pass through `pending`, so they
+never appear in `get_pending_analyses`.
+
+### Rule-based auto-triage (`server/src/analysis/ruleTriage.ts`, `runner.ts`)
+
+`ruleTriage.ts` is a pure, zero-I/O module (matching `cidr.ts`/`newEntity.ts`/
+`baseline.ts`'s pattern) exporting three rule-matching functions —
+`tryAdminAuditLoginRule`, `tryOperationalNoiseRule`,
+`tryReputationBlocklistRule` — each taking already-computed data (event
+rows or `{ total, matching }` SQL completeness counts) and returning a
+`TriageVerdict` (`risk_level` always `'low'`) or `null`. A rule matches
+only when **every** event backing the finding satisfies it — completeness
+is checked via paired `COUNT(*)` SQL queries in `sinkQueries.ts`
+(`sourceIpEventCounts`/`signatureEventCounts`/`auditCandidateEvents`),
+deliberately *not* the `eventsForSignature`/`eventsForSourceIp` fetchers
+(`LIMIT 20`, sized for LLM prompt context) — a burst of more than 20 events
+could otherwise let the most recent 20 silently stand in for "every event."
+
+`runner.ts`'s local `tryRuleTriage` helper wires this into `runHourlyChecks`:
+right after a `new_signature`/`new_source_ip` finding is created/updated,
+it tries the three rules in order (admin login → operational noise →
+reputation blocklist, first match wins) and, on a match, writes an
+already-answered `source: 'rule'` analysis_requests row
+(`createAnsweredRuleAnalysis`) and dismisses the finding directly
+(`setFindingStatus`) — no queue, no click, no AI involved. A finding that
+doesn't fully match any rule is left exactly as it would be without this
+feature. Scope is deliberately narrow: only `new_signature`/`new_source_ip`
+findings are eligible — `anomaly`/`repeat_offender`/`internal_source` are
+standing conditions this doesn't apply to.
+
+Because this only fires at the moment of creation, findings that predate
+the feature (or predate `TRUSTED_ADMIN_NAMES` being configured) never get
+a rule pass on their own. `runRuleTriageBackfill` (also in `runner.ts`,
+exposed via `POST /api/admin/backfill-rule-triage` and the `/admin`
+dashboard page) re-checks every existing `new`/`acknowledged` finding —
+including ones already AI-analyzed — anchoring each finding's completeness
+window to `[finding.first_seen - 24h, finding.first_seen)` rather than
+`[first_seen, first_seen + 24h)`: `first_seen` is stamped with the
+*detection run time*, at the end of the live path's trailing 24h scan, not
+the start, so the events that triggered detection are all *before*
+`first_seen`, not after it. Getting this window backwards is a documented
+past bug — see the `runner.ts` comment above `runRuleTriageBackfill` before
+changing it.
 
 ### Optional enrichment (`server/src/enrichment/unifiMcpClient.ts`)
 
