@@ -31,8 +31,8 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  build:
-    name: build
+  typecheck:
+    name: typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
