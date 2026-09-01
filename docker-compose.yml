@@ -23,6 +23,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - default
+      - proxy
 
 volumes:
   lens-data:
+
+networks:
+  default:
+  proxy:
+    external: true
