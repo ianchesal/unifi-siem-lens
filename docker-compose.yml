@@ -16,7 +16,7 @@ services:
     # `docker compose` under a different project name), update the name
     # below and set SINK_DB_PATH in .env to match the sink's DB_PATH.
     volumes_from:
-      - container:unifi-siem-sink:ro
+      - container:unifi-siem-sink-unifi-siem-sink-1:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/health"]
       interval: 30s
