@@ -25,8 +25,8 @@ export function createAnalysisRequest(
 
   const result = db.conn
     .prepare(
-      `INSERT INTO analysis_requests (finding_id, status, context, source, created_at)
-       VALUES (?, 'pending', ?, 'ai', ?)`
+      `INSERT INTO analysis_requests (finding_id, status, context, created_at)
+       VALUES (?, 'pending', ?, ?)`
     )
     .run(findingId, JSON.stringify(context), now);
   return getAnalysisRequest(db, Number(result.lastInsertRowid)) as AnalysisRequestRow;
