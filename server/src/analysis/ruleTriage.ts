@@ -4,7 +4,8 @@ export const NON_SECURITY_OPERATIONAL_CATEGORIES = ['internet_and_wan'];
 // unifi-siem-sink's normalize.ts UNIFIcategory=Audit / "Network Accessed"
 // event shape). Anchored full-string match, not a substring/includes check
 // — a name mentioned mid-sentence in an unrelated message must not match.
-const AUDIT_LOGIN_PATTERN = /^(.+) accessed UniFi Network using the \w+\. Source IP: [\d.:a-fA-F]+$/;
+const AUDIT_LOGIN_PATTERN =
+  /^(.+) accessed UniFi Network using the \w+\. Source IP: [\d.:a-fA-F]+$/;
 
 export function parseAdminAuditName(message: string): string | null {
   const match = AUDIT_LOGIN_PATTERN.exec(message.trim());

@@ -1,6 +1,12 @@
 import type { LogLevel } from './logger.js';
 
-const DEFAULT_SAFE_SIGNATURE_PREFIXES = ['ET DROP', 'ET CINS', 'ET TOR', 'ET COMPROMISED', 'ET DSHIELD'];
+const DEFAULT_SAFE_SIGNATURE_PREFIXES = [
+  'ET DROP',
+  'ET CINS',
+  'ET TOR',
+  'ET COMPROMISED',
+  'ET DSHIELD',
+];
 
 export interface Config {
   port: number;

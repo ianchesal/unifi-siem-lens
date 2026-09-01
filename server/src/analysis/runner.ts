@@ -1,3 +1,4 @@
+import { createAnsweredRuleAnalysis } from '../db/analysisRequestsStore.js';
 import {
   getFinding,
   hasSeenSignature,
@@ -8,7 +9,6 @@ import {
   setFindingStatus,
   upsertFinding,
 } from '../db/findingsStore.js';
-import { createAnsweredRuleAnalysis } from '../db/analysisRequestsStore.js';
 import type { LensDb } from '../db/lensDb.js';
 import type { SinkDb } from '../db/sinkDb.js';
 import {
@@ -18,15 +18,20 @@ import {
 } from '../db/sinkQueries.js';
 import { computeBaseline, isAnomalous } from './baseline.js';
 import { isInternalSource } from './cidr.js';
-import { applyTrigger, reevaluateTrigger, type Finding } from './findings.js';
-import { detectNewSignatures, detectNewSourceIps, signatureKey, splitSignatureKey } from './newEntity.js';
+import { applyTrigger, type Finding, reevaluateTrigger } from './findings.js';
+import {
+  detectNewSignatures,
+  detectNewSourceIps,
+  signatureKey,
+  splitSignatureKey,
+} from './newEntity.js';
+import { isSustained, REPEAT_OFFENDER_WINDOW_DAYS } from './repeatOffender.js';
 import {
   NON_SECURITY_OPERATIONAL_CATEGORIES,
   tryAdminAuditLoginRule,
   tryOperationalNoiseRule,
   tryReputationBlocklistRule,
 } from './ruleTriage.js';
-import { isSustained, REPEAT_OFFENDER_WINDOW_DAYS } from './repeatOffender.js';
 
 export interface RunnerDeps {
   sinkDb: SinkDb;
@@ -117,7 +122,14 @@ function tryRuleTriage(deps: RunnerDeps, finding: Finding, sinceIso: string, now
 
   if (!verdict) return;
 
-  createAnsweredRuleAnalysis(deps.lensDb, finding.id as number, { finding }, verdict.recommendation, verdict.riskLevel, nowIso);
+  createAnsweredRuleAnalysis(
+    deps.lensDb,
+    finding.id as number,
+    { finding },
+    verdict.recommendation,
+    verdict.riskLevel,
+    nowIso
+  );
   setFindingStatus(deps.lensDb, finding.id as number, 'dismissed');
 }
 
@@ -166,7 +178,10 @@ export function runHourlyChecks(
     );
     for (const ip of detectNewSourceIps(events, seenIpSet)) {
       const existing = getFinding(deps.lensDb, 'source_ip', ip);
-      const finding = upsertFinding(deps.lensDb, applyTrigger(existing, 'new_source_ip', nowIso, 'source_ip', ip));
+      const finding = upsertFinding(
+        deps.lensDb,
+        applyTrigger(existing, 'new_source_ip', nowIso, 'source_ip', ip)
+      );
       markSeenSourceIp(deps.lensDb, ip, nowIso);
       tryRuleTriage(deps, finding, sinceIso, nowIso);
       count++;
