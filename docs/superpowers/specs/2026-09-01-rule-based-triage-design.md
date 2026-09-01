@@ -36,16 +36,37 @@ window, not single-shot facts, and are out of scope for this change.
 
 ## Rules
 
-A finding qualifies for auto-triage only if **every** event backing it
-(fetched the same way `POST /findings/:id/analyze` already does, via
-`eventsForSignature`/`eventsForSourceIp`) matches the *same* rule below. A
-finding whose events are mixed, or match no rule, is left alone — same
-behavior as today.
+A finding qualifies for auto-triage only if **every** event backing it,
+within the same `NEW_ENTITY_WINDOW_HOURS` window the runner already used to
+detect the trigger, matches the *same* rule below. A finding whose events
+are mixed, or match no rule, is left alone — same behavior as today.
+
+Completeness is checked at the SQL level, not by fetching a capped list of
+rows: for each rule, a paired `COUNT(*)` query counts (a) all of the
+entity's events in the window and (b) only those also satisfying the rule's
+predicate. Triage fires only when the two counts are equal and nonzero. This
+deliberately does *not* reuse `eventsForSignature`/`eventsForSourceIp` (the
+`RECENT_EVENTS_LIMIT = 20`-capped fetchers `POST /findings/:id/analyze`
+uses for LLM prompt sizing) — a burst of more than 20 events, exactly the
+shape rule 3 exists to handle, would otherwise let the most recent 20 stand
+in for "every event" and risk auto-dismissing a finding whose earlier,
+unseen events didn't actually match. New `sinkQueries.ts` functions (e.g.
+`signatureEventCounts`, `sourceIpEventCounts`) take the entity, the window,
+and a SQL predicate fragment per rule, and return `{ total, matching }`.
 
 1. **Admin audit login** — every event has `category='audit'` and its
-   `message` parses to an admin name (`"<name> accessed UniFi Network..."`)
-   that appears in the `TRUSTED_ADMIN_NAMES` config (comma-separated env
-   var, empty by default — this rule never fires until configured).
+   `message` matches, as a full anchored pattern (not a substring/`includes`
+   check), the sink's fixed audit-log template: `^(.+) accessed UniFi
+   Network using the \w+\. Source IP: [\d.:a-fA-F]+$` — with the captured
+   name in `TRUSTED_ADMIN_NAMES` (comma-separated env var, empty by
+   default — this rule never fires until configured). A message that
+   doesn't match the anchored pattern at all (differently worded, or the
+   admin name isn't captured) fails safe: the rule simply doesn't match,
+   same as any other non-qualifying event. The sink doesn't currently
+   capture the admin identity as its own structured column — this rule
+   parses `message` because that's a deliberate constraint of today's sink
+   schema, not an oversight; a future structured `actor` column on `events`
+   would let this rule drop the regex entirely.
 2. **Operational noise** — every event's `category` is in a fixed,
    non-security set (`internet_and_wan` today). These categories describe
    device/WAN health, not intrusion activity, so a `new_source_ip` finding
@@ -65,17 +86,21 @@ rule fired and why, and a fixed `risk_level: 'low'`.
 
 ## Data flow
 
-`tryRuleTriage(finding, events): { recommendation, riskLevel } | null` is a
+`tryRuleTriage(entity, counts): { recommendation, riskLevel } | null` is a
 pure function in a new `server/src/analysis/ruleTriage.ts`, matching the
 existing zero-I/O heuristic module pattern (`cidr.ts`, `newEntity.ts`,
-`baseline.ts`).
+`baseline.ts`) — it takes the already-computed `{ total, matching }` counts
+per candidate rule (see Rules above) rather than raw event rows, so the
+completeness check happens once, at the SQL layer, not by re-deriving it
+from a capped in-memory list.
 
 In `runner.ts`'s `runHourlyChecks`, immediately after each `upsertFinding`
 call inside the `new-signature` and `new-source-ip` checks, the runner:
 
-1. Fetches that finding's backing events (same helpers `analysisRequests.ts`
-   already uses for the manual-analyze path).
-2. Calls `tryRuleTriage`.
+1. Runs the SQL completeness counts for that entity, within the same
+   `sinceIso` window already computed for the pass, against each
+   candidate rule's predicate (new `sinkQueries.ts` functions).
+2. Calls `tryRuleTriage` with those counts.
 3. On a match, writes an already-answered `analysis_requests` row
    (`createAnsweredRuleAnalysis`, new store function alongside the existing
    `createAnalysisRequest`/`submitAnalysis`) and sets the finding's `status`
@@ -91,11 +116,19 @@ until someone clicks Analyze).
 Because `applyTrigger` already reopens a `dismissed` finding to `new` when a
 genuinely new trigger type fires or a standing trigger reactivates, an
 auto-dismissed finding is not permanently silenced: if this same entity
-later trips a *different* trigger (e.g. a `repeat_offender` escalation on an
-IP that was auto-dismissed for `new_source_ip`), it reopens and surfaces
-normally, and rule-triage only re-evaluates it if `new_signature`/
-`new_source_ip` fires again — it does not retroactively re-examine
-findings reopened by other trigger types.
+later trips a *different* trigger, it reopens and surfaces normally. This
+can happen on a later run (e.g. a `repeat_offender` escalation weeks later)
+or within the *same* `runHourlyChecks` pass: `new-source-ip` runs before
+`internal-source`, so a source IP that rule-triage dismisses in the
+new-source-ip loop can pick up an `internal_source` trigger moments later
+in the same pass, correctly reopening it to `new` before the pass ends.
+Rule-triage itself only ever runs at the point a `new_signature`/
+`new_source_ip` finding is created — and, since those two triggers are
+deduped by `seen_signatures`/`seen_source_ips` and fire exactly once per
+entity ever, that creation point never recurs for the same entity. So
+rule-triage never re-examines an already-triaged finding; the reopening
+above is existing `applyTrigger`/runner behavior operating on the finding
+afterward, not a second triage pass.
 
 ## Data model
 
@@ -131,8 +164,19 @@ Two new env vars in `config.ts`, both optional with safe defaults:
 `ruleTriage.ts` is a pure function — unit tests cover: each rule matching
 in isolation, mixed-category events failing to match any rule, an
 `ET MALWARE`/`ET TROJAN`/etc. signature never matching rule 3 regardless of
-`action`, and an audit login from a name outside `TRUSTED_ADMIN_NAMES` not
-matching rule 1. `runner.ts` integration tests cover: a qualifying finding
-ending up `dismissed` with an answered, `source: 'rule'` analysis request
-attached, and a non-qualifying (or mixed-event) finding created exactly as
-today with no analysis_requests row at all.
+`action`, an audit login from a name outside `TRUSTED_ADMIN_NAMES` not
+matching rule 1, and a `message` that doesn't fit rule 1's anchored pattern
+(differently worded, or missing the "Source IP:" suffix) failing to match
+rather than loosely substring-matching. The SQL completeness-count
+functions get their own test: a burst where the most recent 20 events all
+match a rule but an older event (still inside the window) doesn't, must
+produce `total !== matching` and therefore no triage — the scenario the
+LIMIT-20 approach would have missed.
+
+`runner.ts` integration tests cover: a qualifying finding ending up
+`dismissed` with an answered, `source: 'rule'` analysis request attached; a
+non-qualifying (or mixed-event) finding created exactly as today with no
+analysis_requests row at all; and the same-pass reopen interaction — a
+source IP that rule-triage dismisses in the `new-source-ip` loop, then
+picks up an `internal_source` trigger later in the *same* `runHourlyChecks`
+call, ends the pass as `status: 'new'`, not `dismissed`.
