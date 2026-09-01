@@ -6,6 +6,7 @@ describe('loadConfig', () => {
 
   beforeEach(() => {
     process.env.SINK_DB_PATH = '/tmp/events.db';
+    process.env.MCP_SECRET = 'test-secret';
   });
 
   afterEach(() => {
@@ -31,5 +32,10 @@ describe('loadConfig', () => {
   it('throws when SINK_DB_PATH is missing', () => {
     delete process.env.SINK_DB_PATH;
     expect(() => loadConfig()).toThrow(/SINK_DB_PATH/);
+  });
+
+  it('throws when MCP_SECRET is missing', () => {
+    delete process.env.MCP_SECRET;
+    expect(() => loadConfig()).toThrow(/MCP_SECRET/);
   });
 });

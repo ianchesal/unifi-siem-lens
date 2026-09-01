@@ -216,11 +216,14 @@ runs a Claude Code session against it.
   is logged loudly and surfaced as degraded in `/health`, rather than
   failing silently on the first query that happens to touch a missing
   column.
-- **Access control is a deliberate non-goal for v1**: unlike the sink's
-  hard-required `MCP_SECRET`, lens's REST API and MCP server have no auth
-  by default — this is scoped as a single-user LAN tool, and the bind
-  address should default to LAN-only, not `0.0.0.0`-exposed-to-the-internet.
-  Revisit if that assumption changes.
+- **Access control is a deliberate partial non-goal for v1**: lens's REST
+  API/dashboard have no auth by default — this is scoped as a single-user
+  LAN tool, and the bind address should default to LAN-only, not
+  `0.0.0.0`-exposed-to-the-internet. The `/mcp` endpoint is the exception,
+  mirroring the sink's hard-required `MCP_SECRET` bearer-token check, since
+  it's the one surface a remote Claude Code session calls directly.
+  Revisit the REST API/dashboard assumption if the single-user scoping
+  changes.
 - **Concurrent Claude Code sessions are an accepted, unhandled edge case**:
   `submit_analysis` errors on an already-answered id, but there is no
   claim/lock step, so two sessions could both fetch the same `pending`

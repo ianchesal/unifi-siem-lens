@@ -12,6 +12,7 @@ const baseConfig = {
   lanCidrs: [],
   unifiMcpServerUrl: null,
   logLevel: 'error' as const,
+  mcpSecret: 'test-secret',
 };
 
 const fakeSinkDb = {} as SinkDb;
@@ -50,6 +51,22 @@ describe('createApp /health', () => {
     expect(res.body.sinkDb).toBe('unavailable');
     expect(res.body.schema).toBe('unknown');
     expect(res.body.missingColumns).toBeUndefined();
+  });
+});
+
+describe('createApp /mcp auth', () => {
+  it('rejects requests with no Authorization header', async () => {
+    const lensDb = openLensDb(':memory:');
+    const app = createApp(null, lensDb, null, baseConfig, null);
+    const res = await request(app).post('/mcp').send({});
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects requests with the wrong bearer token', async () => {
+    const lensDb = openLensDb(':memory:');
+    const app = createApp(null, lensDb, null, baseConfig, null);
+    const res = await request(app).post('/mcp').set('Authorization', 'Bearer wrong').send({});
+    expect(res.status).toBe(401);
   });
 });
 

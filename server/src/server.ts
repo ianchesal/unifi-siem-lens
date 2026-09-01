@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import { type RunnerDeps, runHourlyChecks } from './analysis/runner.js';
 import { createAnalysisRequestsRouter } from './api/analysisRequests.js';
 import { createEventsRouter } from './api/events.js';
@@ -30,6 +30,15 @@ export function createApp(
   app.use(express.json());
 
   const unifiMcp = createUnifiMcpClient(config.unifiMcpServerUrl);
+
+  const mcpAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    const auth = req.headers.authorization;
+    if (!auth || auth !== `Bearer ${config.mcpSecret}`) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    next();
+  };
 
   app.get('/health', (_req, res) => {
     const schemaOk = !sinkDb || !schemaCheck || schemaCheck.ok;
@@ -63,7 +72,7 @@ export function createApp(
     res.json(result);
   });
 
-  app.post('/mcp', async (req, res, next) => {
+  app.post('/mcp', mcpAuthMiddleware, async (req, res, next) => {
     const mcpServer = new McpServer({ name: 'unifi-siem-lens', version: '0.1.0' });
     registerAnalysisTools(mcpServer, lensDb);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });

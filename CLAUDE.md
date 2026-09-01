@@ -125,8 +125,13 @@ project; it's purely additive context for the Claude Code handoff.
 ## Config
 
 All runtime config is env-driven, loaded once in `server/src/config.ts`
-(`loadConfig`) — fails fast if `SINK_DB_PATH` is unset or `LOG_LEVEL` is
-invalid. `HOST` defaults to `127.0.0.1` (not `0.0.0.0`) since this project
-has no authentication on its REST API or `/mcp` endpoint by design (a
-single-user LAN tool) — widen it deliberately, never as an accident. See
-the README's Environment Variables table for the full list and defaults.
+(`loadConfig`) — fails fast if `SINK_DB_PATH` or `MCP_SECRET` is unset or
+`LOG_LEVEL` is invalid. `HOST` defaults to `127.0.0.1` (not `0.0.0.0`)
+since the dashboard/REST API have no authentication of their own by design
+(a single-user LAN tool) — widen it deliberately, never as an accident.
+The `/mcp` endpoint is the one exception: it requires
+`Authorization: Bearer <MCP_SECRET>` (checked in `server/src/server.ts`'s
+`mcpAuthMiddleware`, applied only to the `/mcp` route), mirroring
+`unifi-mcp-server`'s auth so a Claude Code session configured against a
+LAN-exposed lens instance still needs the shared secret. See the README's
+Environment Variables table for the full list and defaults.

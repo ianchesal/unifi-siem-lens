@@ -45,6 +45,7 @@ event database read-only via `--volumes-from`.
 ```bash
 SINK_DB_PATH=/data/events.db
 LAN_CIDRS=10.0.0.0/8,192.168.0.0/16,172.16.0.0/12
+MCP_SECRET=<choose-a-strong-secret>
 ```
 
 `SINK_DB_PATH=/data/events.db` matches the mount point `unifi-siem-sink`
@@ -79,7 +80,8 @@ project name, adjust `unifi-siem-sink` above to match.
   "mcpServers": {
     "unifi-siem-lens": {
       "type": "http",
-      "url": "http://<homelab-ip>:3100/mcp"
+      "url": "http://<homelab-ip>:3100/mcp",
+      "headers": { "Authorization": "Bearer <your-MCP_SECRET>" }
     }
   }
 }
@@ -105,8 +107,9 @@ recommendations back — which then show up next to the finding.
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `SINK_DB_PATH` | yes | — | Path to `unifi-siem-sink`'s `events.db`, opened read-only |
+| `MCP_SECRET` | yes | — | Bearer token clients must send as `Authorization: Bearer <MCP_SECRET>` to call `/mcp` |
 | `PORT` | no | `3100` | Port the dashboard/API/MCP server listens on |
-| `HOST` | no | `127.0.0.1` | Bind address. Defaults to localhost-only — there is no authentication, so widen this deliberately (e.g. to your LAN interface IP, or `0.0.0.0`) only if you want the dashboard reachable from other devices |
+| `HOST` | no | `127.0.0.1` | Bind address. Defaults to localhost-only — the dashboard/REST API have no authentication of their own (only `/mcp` does, via `MCP_SECRET`), so widen this deliberately (e.g. to your LAN interface IP, or `0.0.0.0`) only if you want the dashboard reachable from other devices |
 | `LENS_DB_PATH` | no | `./data/lens.db` (`/lens-data/lens.db` in Docker) | Lens's own SQLite store — findings, baselines, seen-entity tracking, analysis-request queue |
 | `LAN_CIDRS` | no | *(none)* | Comma-separated CIDRs treated as internal/LAN for the internal-source heuristic, e.g. `10.0.0.0/8,192.168.0.0/16` |
 | `UNIFI_MCP_SERVER_URL` | no | *(unset)* | Optional `unifi-mcp-server` MCP endpoint, e.g. `http://localhost:3000/mcp`. When set, lens resolves source IPs to known client names and pulls a firewall-rule summary into analysis context. Left unset, this enrichment is skipped entirely — never required |
@@ -123,7 +126,7 @@ git clone https://github.com/ianchesal/unifi-siem-lens
 cd unifi-siem-lens
 npm install
 cp server/.env.example server/.env
-# edit server/.env: set SINK_DB_PATH to your unifi-siem-sink events.db
+# edit server/.env: set SINK_DB_PATH to your unifi-siem-sink events.db, and MCP_SECRET to a strong secret
 # (docker cp unifi-siem-sink-unifi-siem-sink-1:/data/events.db ./server/data/events.db)
 ```
 

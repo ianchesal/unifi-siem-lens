@@ -8,6 +8,7 @@ export interface Config {
   lanCidrs: string[];
   unifiMcpServerUrl: string | null;
   logLevel: LogLevel;
+  mcpSecret: string;
 }
 
 function parseIntEnv(key: string, defaultValue: number): number {
@@ -23,6 +24,10 @@ function parseIntEnv(key: string, defaultValue: number): number {
 export function loadConfig(): Config {
   if (!process.env.SINK_DB_PATH?.trim()) {
     throw new Error('Missing required environment variable: SINK_DB_PATH');
+  }
+
+  if (!process.env.MCP_SECRET?.trim()) {
+    throw new Error('Missing required environment variable: MCP_SECRET');
   }
 
   const validLevels: LogLevel[] = ['error', 'warn', 'info', 'debug'];
@@ -44,5 +49,6 @@ export function loadConfig(): Config {
     lanCidrs,
     unifiMcpServerUrl: process.env.UNIFI_MCP_SERVER_URL?.trim() || null,
     logLevel: rawLogLevel as LogLevel,
+    mcpSecret: process.env.MCP_SECRET,
   };
 }

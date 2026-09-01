@@ -20,10 +20,12 @@ I'll acknowledge receipt within 7 days and aim to release a fix within 30 days f
 ## Scope
 
 This project runs on a private homelab network and is not intended for
-public internet exposure. Unlike its sibling projects, **the REST API and
-MCP endpoint have no authentication** — this is a deliberate design choice
-for a single-user LAN dashboard, not an oversight. The server binds to
-`127.0.0.1` by default for exactly this reason; only widen `HOST` (or a
-Docker port publish) deliberately, and never expose port 3100 to the
-internet. This service also opens the sibling `unifi-siem-sink` project's
-database **read-only** and never writes to it.
+public internet exposure. **The REST API and dashboard have no
+authentication** — this is a deliberate design choice for a single-user
+LAN dashboard, not an oversight. The `/mcp` endpoint is the exception: it
+requires an `Authorization: Bearer <MCP_SECRET>` header, matching its
+sibling projects — protect your `MCP_SECRET` and do not expose it. The
+server binds to `127.0.0.1` by default; only widen `HOST` (or a Docker
+port publish) deliberately, and never expose port 3100 to the internet.
+This service also opens the sibling `unifi-siem-sink` project's database
+**read-only** and never writes to it.
