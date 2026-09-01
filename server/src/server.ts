@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { type RunnerDeps, runHourlyChecks } from './analysis/runner.js';
 import { createAnalysisRequestsRouter } from './api/analysisRequests.js';
 import { createEventsRouter } from './api/events.js';
@@ -27,6 +28,14 @@ export function createApp(
   schemaCheck: SchemaCheckResult | null = null
 ) {
   const app = express();
+  app.use(
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 300,
+      standardHeaders: true,
+      legacyHeaders: false,
+    })
+  );
   app.use(express.json());
 
   const unifiMcp = createUnifiMcpClient(config.unifiMcpServerUrl);
