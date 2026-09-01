@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from './api';
+import { AdminPage } from './components/AdminPage';
 import { EventsOverTimeChart } from './components/EventsOverTimeChart';
 import { FindingsList } from './components/FindingsList';
 import { KpiStats } from './components/KpiStats';
@@ -20,6 +21,14 @@ const RANGES = [
 ];
 
 export default function App() {
+  if (window.location.pathname === '/admin') {
+    return <AdminPage />;
+  }
+
+  return <Dashboard />;
+}
+
+function Dashboard() {
   const [health, setHealth] = useState<Health | null>(null);
   const [sinceDays, setSinceDays] = useState(7);
   const [refreshKey, setRefreshKey] = useState(0);

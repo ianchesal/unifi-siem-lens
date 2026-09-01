@@ -70,6 +70,34 @@ describe('createApp /mcp auth', () => {
   });
 });
 
+describe('createApp /api/admin/backfill-rule-triage', () => {
+  it('returns 503 when the sink DB is unavailable (runnerDeps null)', async () => {
+    const lensDb = openLensDb(':memory:');
+    const app = createApp(null, lensDb, null, baseConfig, null);
+    const res = await request(app).post('/api/admin/backfill-rule-triage');
+    expect(res.status).toBe(503);
+  });
+
+  it('runs the backfill and returns its result shape when the sink DB is available', async () => {
+    const lensDb = openLensDb(':memory:');
+    const runnerDeps = {
+      sinkDb: fakeSinkDb,
+      lensDb,
+      lanCidrs: [],
+      trustedAdminNames: [],
+      safeSignaturePrefixes: ['ET DROP'],
+    };
+    const app = createApp(fakeSinkDb, lensDb, runnerDeps, baseConfig, { ok: true, missingColumns: [] });
+    const res = await request(app).post('/api/admin/backfill-rule-triage');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      checked: 0,
+      dismissed: 0,
+      byRule: { admin_login: 0, operational_noise: 0, reputation_blocklist: 0 },
+    });
+  });
+});
+
 describe('createApp route precedence', () => {
   it('does not let the static/SPA fallback swallow /api or /health routes', async () => {
     const lensDb = openLensDb(':memory:');

@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import { type RunnerDeps, runHourlyChecks } from './analysis/runner.js';
+import { type RunnerDeps, runHourlyChecks, runRuleTriageBackfill } from './analysis/runner.js';
 import { createAnalysisRequestsRouter } from './api/analysisRequests.js';
 import { createEventsRouter } from './api/events.js';
 import { createFindingsRouter } from './api/findings.js';
@@ -78,6 +78,15 @@ export function createApp(
       return;
     }
     const result = runHourlyChecks(runnerDeps);
+    res.json(result);
+  });
+
+  app.post('/api/admin/backfill-rule-triage', (_req, res) => {
+    if (!runnerDeps) {
+      res.status(503).json({ error: 'Sink DB is unavailable; backfill cannot run.' });
+      return;
+    }
+    const result = runRuleTriageBackfill(runnerDeps);
     res.json(result);
   });
 

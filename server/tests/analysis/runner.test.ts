@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { openLensDb } from '../../src/db/lensDb.js';
-import { listFindings } from '../../src/db/findingsStore.js';
+import { listFindings, upsertFinding } from '../../src/db/findingsStore.js';
 import {
+  createAnalysisRequest,
   getAnalysisRequestsForFinding,
+  submitAnalysis,
 } from '../../src/db/analysisRequestsStore.js';
-import { runDailyAnomalyCheck, runHourlyChecks } from '../../src/analysis/runner.js';
+import { applyTrigger } from '../../src/analysis/findings.js';
+import { runDailyAnomalyCheck, runHourlyChecks, runRuleTriageBackfill } from '../../src/analysis/runner.js';
 
 function seededSinkDb(
   rows: {
@@ -243,5 +246,90 @@ describe('rule-based triage', () => {
     const ruleRequests = getAnalysisRequestsForFinding(lensDb, finding?.id as number).filter((r) => r.source === 'rule');
     expect(ruleRequests).toHaveLength(1);
     expect(ruleRequests[0].status).toBe('answered');
+  });
+});
+
+describe('runRuleTriageBackfill', () => {
+  const deps = (sinkDb: ReturnType<typeof seededSinkDb>, lensDb: ReturnType<typeof openLensDb>) => ({
+    sinkDb,
+    lensDb,
+    lanCidrs: [],
+    trustedAdminNames: [],
+    safeSignaturePrefixes: ['ET DROP'],
+  });
+
+  it('dismisses an existing new finding whose window-scoped events all match a rule, and reports counts', () => {
+    const firstSeen = '2026-08-20T00:00:00Z';
+    const sinkDb = seededSinkDb([
+      { received_at: '2026-08-20T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '203.0.113.5', action: 'blocked' },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    upsertFinding(lensDb, applyTrigger(null, 'new_source_ip', firstSeen, 'source_ip', '203.0.113.5'));
+
+    const result = runRuleTriageBackfill(deps(sinkDb, lensDb));
+
+    expect(result.checked).toBe(1);
+    expect(result.dismissed).toBe(1);
+    expect(result.byRule.reputation_blocklist).toBe(1);
+
+    const finding = listFindings(lensDb, { status: 'dismissed' }).find((f) => f.entity_key === '203.0.113.5');
+    expect(finding).toBeDefined();
+    const requests = getAnalysisRequestsForFinding(lensDb, finding?.id as number);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].source).toBe('rule');
+  });
+
+  it('skips findings that are already dismissed or resolved', () => {
+    const sinkDb = seededSinkDb([]);
+    const lensDb = openLensDb(':memory:');
+    upsertFinding(lensDb, {
+      entity_type: 'source_ip',
+      entity_key: '9.9.9.9',
+      first_seen: '2026-08-20T00:00:00Z',
+      last_seen: '2026-08-20T00:00:00Z',
+      triggers: [{ type: 'new_source_ip', first_seen: '2026-08-20T00:00:00Z', last_seen: '2026-08-20T00:00:00Z', active: true }],
+      severity_score: 1,
+      status: 'dismissed',
+    });
+
+    const result = runRuleTriageBackfill(deps(sinkDb, lensDb));
+
+    expect(result.checked).toBe(0);
+    expect(result.dismissed).toBe(0);
+  });
+
+  it('re-processes a finding that already has an AI-answered analysis request', () => {
+    const firstSeen = '2026-08-20T00:00:00Z';
+    const sinkDb = seededSinkDb([
+      { received_at: '2026-08-20T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '203.0.113.7', action: 'blocked' },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    const finding = upsertFinding(lensDb, applyTrigger(null, 'new_source_ip', firstSeen, 'source_ip', '203.0.113.7'));
+    const aiRequest = createAnalysisRequest(lensDb, finding.id as number, {}, '2026-08-20T02:00:00Z');
+    submitAnalysis(lensDb, aiRequest.id, 'looked benign to Claude', 'low', '2026-08-20T02:05:00Z');
+
+    const result = runRuleTriageBackfill(deps(sinkDb, lensDb));
+
+    expect(result.dismissed).toBe(1);
+    const requests = getAnalysisRequestsForFinding(lensDb, finding.id as number);
+    expect(requests).toHaveLength(2);
+    expect(requests.some((r) => r.source === 'ai')).toBe(true);
+    expect(requests.some((r) => r.source === 'rule')).toBe(true);
+  });
+
+  it('anchors the completeness window to the finding\'s first_seen, not to now', () => {
+    const firstSeen = '2026-08-20T00:00:00Z';
+    const sinkDb = seededSinkDb([
+      { received_at: '2026-08-20T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '203.0.113.9', action: 'blocked' },
+      // Outside the [first_seen, first_seen+24h) window and non-matching — must not
+      // count toward `total`, or the completeness check would wrongly fail.
+      { received_at: '2026-09-01T00:00:00Z', category: 'ips_alert', signature: 'ET MALWARE Bar', source_ip: '203.0.113.9', action: 'blocked' },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    upsertFinding(lensDb, applyTrigger(null, 'new_source_ip', firstSeen, 'source_ip', '203.0.113.9'));
+
+    const result = runRuleTriageBackfill(deps(sinkDb, lensDb));
+
+    expect(result.dismissed).toBe(1);
   });
 });

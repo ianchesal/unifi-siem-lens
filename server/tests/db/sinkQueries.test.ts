@@ -108,6 +108,41 @@ describe('sourceIpEventCounts / signatureEventCounts', () => {
     expect(counts.total).toBe(2);
     expect(counts.matching).toBe(1);
   });
+
+  it('sourceIpEventCounts respects an optional untilIso upper bound', () => {
+    const db = seededEventsDb([
+      { received_at: '2026-08-31T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '1.2.3.4', action: 'blocked' },
+      { received_at: '2026-09-05T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '1.2.3.4', action: 'blocked' },
+    ]);
+    const counts = sourceIpEventCounts(
+      db,
+      '1.2.3.4',
+      '2026-08-31T00:00:00Z',
+      "action = 'blocked'",
+      [],
+      '2026-09-01T00:00:00Z'
+    );
+    expect(counts.total).toBe(1);
+    expect(counts.matching).toBe(1);
+  });
+
+  it('signatureEventCounts respects an optional untilIso upper bound', () => {
+    const db = seededEventsDb([
+      { received_at: '2026-08-31T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '1.2.3.4', action: 'blocked' },
+      { received_at: '2026-09-05T01:00:00Z', category: 'ips_alert', signature: 'ET DROP Foo', source_ip: '1.2.3.4', action: 'blocked' },
+    ]);
+    const counts = signatureEventCounts(
+      db,
+      'ips_alert',
+      'ET DROP Foo',
+      '2026-08-31T00:00:00Z',
+      "action = 'blocked'",
+      [],
+      '2026-09-01T00:00:00Z'
+    );
+    expect(counts.total).toBe(1);
+    expect(counts.matching).toBe(1);
+  });
 });
 
 describe('auditCandidateEvents', () => {
@@ -123,5 +158,14 @@ describe('auditCandidateEvents', () => {
     const events = auditCandidateEvents(db, '1.2.3.4', '2026-08-31T00:00:00Z');
     expect(events).toHaveLength(25);
     expect(events[0].category).toBe('audit');
+  });
+
+  it('respects an optional untilIso upper bound', () => {
+    const db = seededEventsDb([
+      { received_at: '2026-08-31T01:00:00Z', category: 'audit', source_ip: '1.2.3.4', message: 'Ian C. accessed UniFi Network using the web. Source IP: 1.2.3.4' },
+      { received_at: '2026-09-05T01:00:00Z', category: 'audit', source_ip: '1.2.3.4', message: 'Ian C. accessed UniFi Network using the web. Source IP: 1.2.3.4' },
+    ]);
+    const events = auditCandidateEvents(db, '1.2.3.4', '2026-08-31T00:00:00Z', '2026-09-01T00:00:00Z');
+    expect(events).toHaveLength(1);
   });
 });

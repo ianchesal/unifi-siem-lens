@@ -68,22 +68,41 @@ function runCheck(name: string, fn: () => number): number {
   }
 }
 
-// Attempts rule-based auto-triage for a just-created/updated new_signature or
-// new_source_ip finding. Fires at most one rule (admin login, then
-// operational noise, then reputation blocklist — first match wins) and, on a
-// match, writes an already-answered analysis_requests row and dismisses the
-// finding directly. No-op (returns without touching the finding) if no rule
-// fully explains every event behind it.
-function tryRuleTriage(deps: RunnerDeps, finding: Finding, sinceIso: string, nowIso: string): void {
+export type RuleName = 'admin_login' | 'operational_noise' | 'reputation_blocklist';
+
+export interface TriageOutcome {
+  matched: boolean;
+  rule?: RuleName;
+}
+
+// Attempts rule-based auto-triage for a new_signature or new_source_ip
+// finding, checking every backing event within [sinceIso, untilIso) (an open
+// upper bound — all events from sinceIso onward — when untilIso is omitted,
+// which is how the live hourly path calls this: the finding was *just*
+// created/updated, so "now" is the natural upper bound). Fires at most one
+// rule (admin login, then operational noise, then reputation blocklist —
+// first match wins) and, on a match, writes an already-answered
+// analysis_requests row and dismisses the finding directly. No-op (returns
+// { matched: false }, finding untouched) if no rule fully explains every
+// event behind it.
+function tryRuleTriage(
+  deps: RunnerDeps,
+  finding: Finding,
+  sinceIso: string,
+  nowIso: string,
+  untilIso?: string
+): TriageOutcome {
   const prefixClause = deps.safeSignaturePrefixes.map(() => 'signature LIKE ?').join(' OR ');
   const prefixParams = deps.safeSignaturePrefixes.map((p) => `${p}%`);
 
   let verdict: ReturnType<typeof tryAdminAuditLoginRule> = null;
+  let rule: RuleName | undefined;
 
   if (finding.entity_type === 'source_ip') {
     if (deps.trustedAdminNames.length > 0) {
-      const auditEvents = auditCandidateEvents(deps.sinkDb, finding.entity_key, sinceIso);
+      const auditEvents = auditCandidateEvents(deps.sinkDb, finding.entity_key, sinceIso, untilIso);
       verdict = tryAdminAuditLoginRule(auditEvents, deps.trustedAdminNames);
+      if (verdict) rule = 'admin_login';
     }
 
     if (!verdict) {
@@ -92,9 +111,11 @@ function tryRuleTriage(deps: RunnerDeps, finding: Finding, sinceIso: string, now
         finding.entity_key,
         sinceIso,
         `category IN (${NON_SECURITY_OPERATIONAL_CATEGORIES.map(() => '?').join(',')})`,
-        NON_SECURITY_OPERATIONAL_CATEGORIES
+        NON_SECURITY_OPERATIONAL_CATEGORIES,
+        untilIso
       );
       verdict = tryOperationalNoiseRule(opCounts);
+      if (verdict) rule = 'operational_noise';
     }
 
     if (!verdict && prefixClause) {
@@ -103,9 +124,11 @@ function tryRuleTriage(deps: RunnerDeps, finding: Finding, sinceIso: string, now
         finding.entity_key,
         sinceIso,
         `category = 'ips_alert' AND action = 'blocked' AND (${prefixClause})`,
-        prefixParams
+        prefixParams,
+        untilIso
       );
       verdict = tryReputationBlocklistRule(blockCounts);
+      if (verdict) rule = 'reputation_blocklist';
     }
   } else {
     const { category, signature } = splitSignatureKey(finding.entity_key);
@@ -116,13 +139,15 @@ function tryRuleTriage(deps: RunnerDeps, finding: Finding, sinceIso: string, now
         signature,
         sinceIso,
         `action = 'blocked' AND (${prefixClause})`,
-        prefixParams
+        prefixParams,
+        untilIso
       );
       verdict = tryReputationBlocklistRule(blockCounts);
+      if (verdict) rule = 'reputation_blocklist';
     }
   }
 
-  if (!verdict) return;
+  if (!verdict) return { matched: false };
 
   createAnsweredRuleAnalysis(
     deps.lensDb,
@@ -133,6 +158,7 @@ function tryRuleTriage(deps: RunnerDeps, finding: Finding, sinceIso: string, now
     nowIso
   );
   setFindingStatus(deps.lensDb, finding.id as number, 'dismissed');
+  return { matched: true, rule };
 }
 
 export function runHourlyChecks(
@@ -343,4 +369,47 @@ export function runDailyAnomalyCheck(
   });
 
   return { findingsTouched: touched };
+}
+
+export interface BackfillResult {
+  checked: number;
+  dismissed: number;
+  byRule: Record<RuleName, number>;
+}
+
+// One-off catch-up for findings created before rule-based triage existed (or
+// before it was configured) — the live path only ever evaluates a finding at
+// the moment it's created, so anything already sitting in the findings table
+// as 'new'/'acknowledged' never gets a rule pass otherwise. Re-checks every
+// such finding against the same three rules, anchoring each finding's
+// completeness window to its own first_seen (not "now") so the verdict
+// matches what the live path would have produced had rule-triage existed at
+// detection time. Runs against every candidate finding regardless of
+// whether it already has an AI-answered analysis request — a rule match adds
+// a second, rule-sourced request and dismisses the finding either way.
+export function runRuleTriageBackfill(deps: RunnerDeps): BackfillResult {
+  const nowIso = new Date().toISOString();
+  const result: BackfillResult = {
+    checked: 0,
+    dismissed: 0,
+    byRule: { admin_login: 0, operational_noise: 0, reputation_blocklist: 0 },
+  };
+
+  const candidates = listFindings(deps.lensDb).filter(
+    (f) => f.status === 'new' || f.status === 'acknowledged'
+  );
+
+  for (const finding of candidates) {
+    result.checked++;
+    const untilIso = new Date(
+      new Date(finding.first_seen).getTime() + NEW_ENTITY_WINDOW_HOURS * 3600 * 1000
+    ).toISOString();
+    const outcome = tryRuleTriage(deps, finding, finding.first_seen, nowIso, untilIso);
+    if (outcome.matched && outcome.rule) {
+      result.dismissed++;
+      result.byRule[outcome.rule]++;
+    }
+  }
+
+  return result;
 }

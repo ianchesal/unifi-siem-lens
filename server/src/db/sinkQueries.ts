@@ -135,19 +135,22 @@ export function sourceIpEventCounts(
   sourceIp: string,
   sinceIso: string,
   matchingWhereSql: string,
-  matchingParams: (string | number)[] = []
+  matchingParams: (string | number)[] = [],
+  untilIso?: string
 ): EntityEventCounts {
+  const windowSql = untilIso ? 'received_at >= ? AND received_at < ?' : 'received_at >= ?';
+  const windowParams = untilIso ? [sinceIso, untilIso] : [sinceIso];
   const total = (
     db.conn
-      .prepare('SELECT COUNT(*) as n FROM events WHERE source_ip = ? AND received_at >= ?')
-      .get(sourceIp, sinceIso) as { n: number }
+      .prepare(`SELECT COUNT(*) as n FROM events WHERE source_ip = ? AND ${windowSql}`)
+      .get(sourceIp, ...windowParams) as { n: number }
   ).n;
   const matching = (
     db.conn
       .prepare(
-        `SELECT COUNT(*) as n FROM events WHERE source_ip = ? AND received_at >= ? AND (${matchingWhereSql})`
+        `SELECT COUNT(*) as n FROM events WHERE source_ip = ? AND ${windowSql} AND (${matchingWhereSql})`
       )
-      .get(sourceIp, sinceIso, ...matchingParams) as { n: number }
+      .get(sourceIp, ...windowParams, ...matchingParams) as { n: number }
   ).n;
   return { total, matching };
 }
@@ -158,21 +161,24 @@ export function signatureEventCounts(
   signature: string,
   sinceIso: string,
   matchingWhereSql: string,
-  matchingParams: (string | number)[] = []
+  matchingParams: (string | number)[] = [],
+  untilIso?: string
 ): EntityEventCounts {
+  const windowSql = untilIso ? 'received_at >= ? AND received_at < ?' : 'received_at >= ?';
+  const windowParams = untilIso ? [sinceIso, untilIso] : [sinceIso];
   const total = (
     db.conn
       .prepare(
-        'SELECT COUNT(*) as n FROM events WHERE category = ? AND signature = ? AND received_at >= ?'
+        `SELECT COUNT(*) as n FROM events WHERE category = ? AND signature = ? AND ${windowSql}`
       )
-      .get(category, signature, sinceIso) as { n: number }
+      .get(category, signature, ...windowParams) as { n: number }
   ).n;
   const matching = (
     db.conn
       .prepare(
-        `SELECT COUNT(*) as n FROM events WHERE category = ? AND signature = ? AND received_at >= ? AND (${matchingWhereSql})`
+        `SELECT COUNT(*) as n FROM events WHERE category = ? AND signature = ? AND ${windowSql} AND (${matchingWhereSql})`
       )
-      .get(category, signature, sinceIso, ...matchingParams) as { n: number }
+      .get(category, signature, ...windowParams, ...matchingParams) as { n: number }
   ).n;
   return { total, matching };
 }
@@ -186,8 +192,19 @@ export function signatureEventCounts(
 export function auditCandidateEvents(
   db: SinkDb,
   sourceIp: string,
-  sinceIso: string
+  sinceIso: string,
+  untilIso?: string
 ): { category: string; message: string | null }[] {
+  if (untilIso) {
+    return db.conn
+      .prepare(
+        'SELECT category, message FROM events WHERE source_ip = ? AND received_at >= ? AND received_at < ?'
+      )
+      .all(sourceIp, sinceIso, untilIso) as unknown as {
+      category: string;
+      message: string | null;
+    }[];
+  }
   return db.conn
     .prepare('SELECT category, message FROM events WHERE source_ip = ? AND received_at >= ?')
     .all(sourceIp, sinceIso) as unknown as { category: string; message: string | null }[];
