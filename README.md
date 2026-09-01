@@ -6,6 +6,8 @@ security events — trend charts, anomaly/repeat-offender detection, and a
 finding into an actual recommendation, without this service needing any
 API key of its own.
 
+![UniFi SIEM Lens dashboard: KPI cards for open findings, critical severity, 24h events, and repeat offenders; trend charts for events over time, top signatures, top source IPs, and severity distribution; and a findings list with acknowledge/dismiss/analyze actions.](docs/images/dashboard.png)
+
 ## Why this exists
 
 This is the third of three companion projects for running an LLM against a
