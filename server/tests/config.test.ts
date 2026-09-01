@@ -38,4 +38,26 @@ describe('loadConfig', () => {
     delete process.env.MCP_SECRET;
     expect(() => loadConfig()).toThrow(/MCP_SECRET/);
   });
+
+  it('defaults trustedAdminNames to empty and safeSignaturePrefixes to the built-in list', () => {
+    delete process.env.TRUSTED_ADMIN_NAMES;
+    delete process.env.SAFE_SIGNATURE_PREFIXES;
+    const config = loadConfig();
+    expect(config.trustedAdminNames).toEqual([]);
+    expect(config.safeSignaturePrefixes).toEqual([
+      'ET DROP',
+      'ET CINS',
+      'ET TOR',
+      'ET COMPROMISED',
+      'ET DSHIELD',
+    ]);
+  });
+
+  it('parses TRUSTED_ADMIN_NAMES and SAFE_SIGNATURE_PREFIXES as comma-separated lists', () => {
+    process.env.TRUSTED_ADMIN_NAMES = 'Ian C., Jane Doe';
+    process.env.SAFE_SIGNATURE_PREFIXES = 'ET DROP, ET CUSTOM';
+    const config = loadConfig();
+    expect(config.trustedAdminNames).toEqual(['Ian C.', 'Jane Doe']);
+    expect(config.safeSignaturePrefixes).toEqual(['ET DROP', 'ET CUSTOM']);
+  });
 });

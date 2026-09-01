@@ -1,5 +1,7 @@
 import type { LogLevel } from './logger.js';
 
+const DEFAULT_SAFE_SIGNATURE_PREFIXES = ['ET DROP', 'ET CINS', 'ET TOR', 'ET COMPROMISED', 'ET DSHIELD'];
+
 export interface Config {
   port: number;
   host: string;
@@ -9,6 +11,8 @@ export interface Config {
   unifiMcpServerUrl: string | null;
   logLevel: LogLevel;
   mcpSecret: string;
+  trustedAdminNames: string[];
+  safeSignaturePrefixes: string[];
 }
 
 function parseIntEnv(key: string, defaultValue: number): number {
@@ -19,6 +23,13 @@ function parseIntEnv(key: string, defaultValue: number): number {
     throw new Error(`Environment variable ${key} must be a number, got: "${raw}"`);
   }
   return parsed;
+}
+
+function parseCommaList(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export function loadConfig(): Config {
@@ -36,10 +47,7 @@ export function loadConfig(): Config {
     throw new Error(`LOG_LEVEL must be one of: ${validLevels.join(', ')}, got: "${rawLogLevel}"`);
   }
 
-  const lanCidrs = (process.env.LAN_CIDRS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const lanCidrs = parseCommaList(process.env.LAN_CIDRS);
 
   return {
     port: parseIntEnv('PORT', 3002),
@@ -50,5 +58,9 @@ export function loadConfig(): Config {
     unifiMcpServerUrl: process.env.UNIFI_MCP_SERVER_URL?.trim() || null,
     logLevel: rawLogLevel as LogLevel,
     mcpSecret: process.env.MCP_SECRET,
+    trustedAdminNames: parseCommaList(process.env.TRUSTED_ADMIN_NAMES),
+    safeSignaturePrefixes: process.env.SAFE_SIGNATURE_PREFIXES
+      ? parseCommaList(process.env.SAFE_SIGNATURE_PREFIXES)
+      : DEFAULT_SAFE_SIGNATURE_PREFIXES,
   };
 }
