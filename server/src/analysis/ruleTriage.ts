@@ -1,4 +1,8 @@
-export const NON_SECURITY_OPERATIONAL_CATEGORIES = ['internet_and_wan', 'unifi_devices'];
+export const NON_SECURITY_OPERATIONAL_CATEGORIES = [
+  'internet_and_wan',
+  'unifi_devices',
+  'software_updates',
+];
 
 // Matches the sink's fixed audit-log template exactly (see
 // unifi-siem-sink's normalize.ts UNIFIcategory=Audit / "Network Accessed"
@@ -49,7 +53,7 @@ export function tryOperationalNoiseRule(counts: EntityEventCounts): TriageVerdic
   if (!isComplete(counts)) return null;
   return {
     recommendation:
-      'Every event behind this finding is operational/WAN-health telemetry (internet_and_wan category), not a security signal. Auto-dismissed by rule.',
+      'Every event behind this finding is operational telemetry (WAN health, device connectivity, or software-update status), not a security signal. Auto-dismissed by rule.',
     riskLevel: 'low',
   };
 }

@@ -132,7 +132,28 @@ function tryRuleTriage(
     }
   } else {
     const { category, signature } = splitSignatureKey(finding.entity_key);
-    if (category === 'ips_alert' && prefixClause) {
+
+    if (NON_SECURITY_OPERATIONAL_CATEGORIES.includes(category)) {
+      // A new_signature finding's events are already scoped to this exact
+      // (category, signature) pair by the query below, so once `category`
+      // itself is operational, every backing event trivially matches —
+      // the `1=1` predicate just gets the total/matching counts symmetric
+      // with the other rules' completeness check (and guards the total=0
+      // case via isComplete).
+      const opCounts = signatureEventCounts(
+        deps.sinkDb,
+        category,
+        signature,
+        sinceIso,
+        '1=1',
+        [],
+        untilIso
+      );
+      verdict = tryOperationalNoiseRule(opCounts);
+      if (verdict) rule = 'operational_noise';
+    }
+
+    if (!verdict && category === 'ips_alert' && prefixClause) {
       const blockCounts = signatureEventCounts(
         deps.sinkDb,
         category,

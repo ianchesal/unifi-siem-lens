@@ -215,6 +215,43 @@ describe('rule-based triage', () => {
     expect(finding).toBeDefined();
   });
 
+  it('auto-dismisses an operational-noise new_signature finding (device telemetry event code)', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      { received_at: now.toISOString(), category: 'unifi_devices', signature: '512', source_ip: '192.168.1.43' },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks(
+      { sinkDb, lensDb, lanCidrs: [], trustedAdminNames: [], safeSignaturePrefixes: ['ET DROP'] },
+      now
+    );
+
+    const finding = listFindings(lensDb, { status: 'dismissed' }).find(
+      (f) => f.entity_key === 'unifi_devices|512'
+    );
+    expect(finding).toBeDefined();
+    const requests = getAnalysisRequestsForFinding(lensDb, finding?.id as number);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].source).toBe('rule');
+  });
+
+  it('auto-dismisses an operational-noise new_signature finding (software update event code)', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      { received_at: now.toISOString(), category: 'software_updates', signature: '510', source_ip: '192.168.1.207' },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks(
+      { sinkDb, lensDb, lanCidrs: [], trustedAdminNames: [], safeSignaturePrefixes: ['ET DROP'] },
+      now
+    );
+
+    const finding = listFindings(lensDb, { status: 'dismissed' }).find(
+      (f) => f.entity_key === 'software_updates|510'
+    );
+    expect(finding).toBeDefined();
+  });
+
   it('same-pass reopen: a rule-dismissed source IP that also trips internal-source ends the pass as new', () => {
     const now = new Date('2026-08-31T12:00:00Z');
     const sinkDb = seededSinkDb([

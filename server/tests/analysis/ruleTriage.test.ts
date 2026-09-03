@@ -97,4 +97,8 @@ describe('NON_SECURITY_OPERATIONAL_CATEGORIES', () => {
   it('includes unifi_devices', () => {
     expect(NON_SECURITY_OPERATIONAL_CATEGORIES).toContain('unifi_devices');
   });
+
+  it('includes software_updates', () => {
+    expect(NON_SECURITY_OPERATIONAL_CATEGORIES).toContain('software_updates');
+  });
 });
