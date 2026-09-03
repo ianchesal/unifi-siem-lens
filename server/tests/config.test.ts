@@ -21,6 +21,13 @@ describe('loadConfig', () => {
     expect(config.host).toBe('127.0.0.1');
     expect(config.lanCidrs).toEqual([]);
     expect(config.unifiMcpServerUrl).toBeNull();
+    expect(config.unifiMcpServerToken).toBeNull();
+  });
+
+  it('parses UNIFI_MCP_SERVER_TOKEN when set', () => {
+    process.env.UNIFI_MCP_SERVER_TOKEN = 'secret-token';
+    const config = loadConfig();
+    expect(config.unifiMcpServerToken).toBe('secret-token');
   });
 
   it('parses LAN_CIDRS as a comma-separated list', () => {

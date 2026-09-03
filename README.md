@@ -177,6 +177,7 @@ invoke it directly as `/server:analyzing-findings`.
 | `TRUSTED_ADMIN_NAMES` | no | *(none)* | Comma-separated admin display names (as they appear in UniFi's own audit log, e.g. `Ian C.`) that auto-dismiss `new_source_ip` findings which are entirely explained by that admin logging into the UniFi console. Empty by default — this rule never fires until configured |
 | `SAFE_SIGNATURE_PREFIXES` | no | `ET DROP,ET CINS,ET TOR,ET COMPROMISED,ET DSHIELD` | Comma-separated IDS/IPS signature prefixes (Emerging Threats' reputation/blocklist rule-family naming convention) that auto-dismiss a finding when every backing event is a blocked hit from one of these signature families. Prefixes are matched via SQL `LIKE` (case-insensitive; a configured prefix containing `%` or `_` acts as a wildcard) — keep entries specific |
 | `UNIFI_MCP_SERVER_URL` | no | *(unset)* | Optional `unifi-mcp-server` MCP endpoint, e.g. `http://localhost:3000/mcp`. When set, lens resolves source IPs to known client names and pulls a firewall-rule summary into analysis context. Left unset, this enrichment is skipped entirely — never required |
+| `UNIFI_MCP_SERVER_TOKEN` | no | *(unset)* | Bearer token sent as `Authorization: Bearer <token>` when calling `UNIFI_MCP_SERVER_URL`, for `unifi-mcp-server` instances that require auth. Ignored if `UNIFI_MCP_SERVER_URL` is unset |
 | `LOG_LEVEL` | no | `info` | `error` \| `warn` \| `info` \| `debug` |
 
 ---

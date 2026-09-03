@@ -38,7 +38,7 @@ export function createApp(
   );
   app.use(express.json());
 
-  const unifiMcp = createUnifiMcpClient(config.unifiMcpServerUrl);
+  const unifiMcp = createUnifiMcpClient(config.unifiMcpServerUrl, config.unifiMcpServerToken);
 
   const mcpAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
     const auth = req.headers.authorization;

@@ -6,21 +6,31 @@ export interface UnifiMcpClient {
   getFirewallSummary(): Promise<unknown | null>;
 }
 
-async function withClient<T>(url: string, fn: (client: Client) => Promise<T>): Promise<T | null> {
+async function withClient<T>(
+  url: string,
+  token: string | null,
+  fn: (client: Client) => Promise<T>
+): Promise<T | null> {
   const client = new Client({ name: 'unifi-siem-lens', version: '0.1.0' });
   try {
-    await client.connect(new StreamableHTTPClientTransport(new URL(url)));
+    const transport = new StreamableHTTPClientTransport(new URL(url), {
+      requestInit: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+    });
+    await client.connect(transport);
     const result = await fn(client);
     await client.close();
     return result;
   } catch {
-    // unifi-mcp-server unreachable or not configured — enrichment is optional,
-    // lens must degrade gracefully rather than fail the request it's enriching.
+    // unifi-mcp-server unreachable, unauthorized, or not configured — enrichment
+    // is optional, lens must degrade gracefully rather than fail the request it's enriching.
     return null;
   }
 }
 
-export function createUnifiMcpClient(url: string | null): UnifiMcpClient {
+export function createUnifiMcpClient(
+  url: string | null,
+  token: string | null = null
+): UnifiMcpClient {
   if (!url) {
     return {
       resolveClient: async () => null,
@@ -30,7 +40,7 @@ export function createUnifiMcpClient(url: string | null): UnifiMcpClient {
 
   return {
     resolveClient: async (ip) =>
-      withClient(url, async (client) => {
+      withClient(url, token, async (client) => {
         const result = await client.callTool({ name: 'get_client', arguments: { ip } });
         const text = (result.content as { text?: string }[])?.[0]?.text;
         if (!text) return null;
@@ -39,7 +49,7 @@ export function createUnifiMcpClient(url: string | null): UnifiMcpClient {
         return { name: parsed.name, network: parsed.network ?? 'unknown' };
       }),
     getFirewallSummary: async () =>
-      withClient(url, async (client) => {
+      withClient(url, token, async (client) => {
         const result = await client.callTool({ name: 'list_firewall_rules', arguments: {} });
         return (result.content as { text?: string }[])?.[0]?.text ?? null;
       }),
