@@ -7,7 +7,7 @@ import { KpiStats } from './components/KpiStats';
 import { SeverityChart } from './components/SeverityChart';
 import { TopSignaturesChart } from './components/TopSignaturesChart';
 import { TopSourceIpsChart } from './components/TopSourceIpsChart';
-import { RefreshIcon, ShieldIcon } from './icons';
+import { RefreshIcon, SettingsIcon, ShieldIcon } from './icons';
 
 interface Health {
   status: 'ok' | 'degraded';
@@ -50,6 +50,9 @@ function Dashboard() {
           </div>
         </div>
         <div className="topbar-right">
+          <a className="icon-btn" href="/admin" aria-label="Admin">
+            <SettingsIcon />
+          </a>
           <div className={`status-pill${sinkAvailable ? '' : ' offline'}`}>
             <span className="status-dot" />
             {health === null ? 'Checking sink…' : sinkAvailable ? 'Sink connected' : 'Sink unavailable'}
