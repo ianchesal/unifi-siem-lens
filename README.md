@@ -141,6 +141,29 @@ sweep the auto-triage rules over your existing `new`/`acknowledged`
 findings — safe to run repeatedly, it only ever touches findings still
 sitting at those two statuses.
 
+## Claude Code skill: analyzing findings
+
+If you're working in this repo with Claude Code, `server/.claude/skills/analyzing-findings/`
+ships a skill (scoped to the `server` workspace, since it drives the MCP
+analysis handoff) that automates the ad hoc "check for pending analyses"
+workflow beyond what a plain request to Claude Code does on its own:
+
+- Drains the entire `get_pending_analyses` queue, not just one request.
+- Enriches each finding by resolving source/destination IPs to hostnames
+  via `unifi-mcp-server`'s client list, when that server is configured and
+  reachable (falls back to IP-only otherwise).
+- Cross-references findings in the same batch that share a root cause
+  (same source IP or signature) so their recommendations note the
+  connection instead of being analyzed in isolation.
+- After answering each finding, flags any that look like good candidates
+  for a new [rule-based auto-triage](#rule-based-auto-triage) rule —
+  a low-risk, fully-explained pattern that has recurred and isn't already
+  covered by an existing rule — without writing the rule code itself; that
+  stays a deliberate, reviewed change to `ruleTriage.ts`.
+
+Ask a Claude Code session working in this repo to "reanalyze findings" or
+invoke it directly as `/server:analyzing-findings`.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
