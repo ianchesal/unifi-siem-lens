@@ -144,7 +144,7 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
           const finReqs = requests[f.id] ?? [];
           const pending = finReqs.find((r) => r.status === 'pending');
           const answered = finReqs.filter((r) => r.status === 'answered').at(-1);
-          const canActOn = f.status !== 'dismissed' && f.status !== 'acknowledged';
+          const canActOn = f.status !== 'dismissed';
           const seenAgo = relativeTime(f.first_seen);
 
           return (
@@ -181,15 +181,15 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
               </div>
 
               <div className="finding-actions">
+                {canActOn && f.status !== 'acknowledged' && (
+                  <button className="btn btn-ghost" type="button" onClick={() => setStatus(f.id, 'acknowledged')}>
+                    Acknowledge
+                  </button>
+                )}
                 {canActOn && (
-                  <>
-                    <button className="btn btn-ghost" type="button" onClick={() => setStatus(f.id, 'acknowledged')}>
-                      Acknowledge
-                    </button>
-                    <button className="btn btn-danger-ghost" type="button" onClick={() => setStatus(f.id, 'dismissed')}>
-                      Dismiss
-                    </button>
-                  </>
+                  <button className="btn btn-danger-ghost" type="button" onClick={() => setStatus(f.id, 'dismissed')}>
+                    Dismiss
+                  </button>
                 )}
                 <button className="btn btn-ghost" type="button" onClick={() => setViewingEventsFor(f.id)}>
                   View raw events
