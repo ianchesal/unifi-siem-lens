@@ -141,6 +141,61 @@ sweep the auto-triage rules over your existing `new`/`acknowledged`
 findings — safe to run repeatedly, it only ever touches findings still
 sitting at those two statuses.
 
+## Homelab/local-service enrichment
+
+An IDS finding pointing at `192.168.1.26:8989` means nothing to a Claude
+Code session unless it also knows `192.168.1.26:8989` is your own Sonarr
+instance, not a mystery host. `HOMELAB_SERVICES_PATH` points lens at a
+local JSON file mapping LAN IPs to the services running on them (typically
+the containers on a homelab/NAS box), so that context is attached
+automatically whenever a finding involving that IP is queued for analysis.
+
+This is deliberately **not** something you configure by pointing lens at
+your Docker Compose files or infrastructure repo directly — the file is a
+static, hand-maintained snapshot that lives outside git, so your homelab's
+layout never ends up in this (public) repo's history or a published Docker
+image.
+
+**Setup:**
+
+1. Copy the template: `cp server/homelab-services.example.json server/data/homelab-services.json`
+   (the default `HOMELAB_SERVICES_PATH`; set the env var if you'd rather
+   keep it elsewhere).
+2. Fill in your own hosts and ports:
+
+   ```json
+   {
+     "192.168.1.26": {
+       "label": "tranquility (homelab)",
+       "services": [
+         { "port": 8989, "name": "sonarr", "description": "TV show PVR" },
+         { "port": 8080, "name": "qbittorrent", "description": "torrent client WebUI" }
+       ]
+     }
+   }
+   ```
+
+   Keys are the destination IPs as they appear in `events.db`; `services`
+   is matched against each event's `dest_port`. An IP present with no
+   matching port still returns the host `label`, so you get partial credit
+   ("this is at least *a* known host") even for ports you haven't listed.
+3. Restart lens. The file is loaded once at startup — like `SINK_DB_PATH`,
+   a missing or malformed file is a silent no-op, never a startup failure.
+
+**What it affects:** only the context bundle built when a finding is
+queued via **Analyze** (`POST /findings/:id/analyze`) — each recent event
+in that bundle gets a `homelab: { host, service }` field the analyzing
+Claude Code session sees alongside the raw event. It has no effect on the
+dashboard, the rule-based auto-triage layer, or findings already queued
+before the file existed — re-run **Analyze** on a finding to pick up a
+newer version of the file.
+
+`server/homelab-services.example.json` (checked in) documents the shape
+with placeholder values; `server/data/homelab-services.json` (gitignored,
+matching the `data/` pattern used for `lens.db`) is where your real
+mapping goes — see [Environment Variables](#environment-variables) below
+for `HOMELAB_SERVICES_PATH`.
+
 ## Claude Code skill: analyzing findings
 
 If you're working in this repo with Claude Code, `server/.claude/skills/analyzing-findings/`
@@ -178,6 +233,7 @@ invoke it directly as `/server:analyzing-findings`.
 | `SAFE_SIGNATURE_PREFIXES` | no | `ET DROP,ET CINS,ET TOR,ET COMPROMISED,ET DSHIELD` | Comma-separated IDS/IPS signature prefixes (Emerging Threats' reputation/blocklist rule-family naming convention) that auto-dismiss a finding when every backing event is a blocked hit from one of these signature families. Prefixes are matched via SQL `LIKE` (case-insensitive; a configured prefix containing `%` or `_` acts as a wildcard) — keep entries specific |
 | `UNIFI_MCP_SERVER_URL` | no | *(unset)* | Optional `unifi-mcp-server` MCP endpoint, e.g. `http://localhost:3000/mcp`. When set, lens resolves source IPs to known client names and pulls a firewall-rule summary into analysis context. Left unset, this enrichment is skipped entirely — never required |
 | `UNIFI_MCP_SERVER_TOKEN` | no | *(unset)* | Bearer token sent as `Authorization: Bearer <token>` when calling `UNIFI_MCP_SERVER_URL`, for `unifi-mcp-server` instances that require auth. Ignored if `UNIFI_MCP_SERVER_URL` is unset |
+| `HOMELAB_SERVICES_PATH` | no | `./data/homelab-services.json` | Path to a local, never-committed JSON file mapping LAN host IPs to the services running on them (e.g. a homelab server's Docker containers — see `server/homelab-services.example.json` for the shape). Analysis context labels event destinations that match an entry (e.g. `192.168.1.26:8989` → `sonarr`) instead of leaving them as bare IP:port. Missing file is a no-op — this enrichment is entirely optional |
 | `LOG_LEVEL` | no | `info` | `error` \| `warn` \| `info` \| `debug` |
 
 ---

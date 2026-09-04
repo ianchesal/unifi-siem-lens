@@ -20,6 +20,7 @@ export interface Config {
   mcpSecret: string;
   trustedAdminNames: string[];
   safeSignaturePrefixes: string[];
+  homelabServicesPath: string;
 }
 
 function parseIntEnv(key: string, defaultValue: number): number {
@@ -70,5 +71,6 @@ export function loadConfig(): Config {
     safeSignaturePrefixes: process.env.SAFE_SIGNATURE_PREFIXES
       ? parseCommaList(process.env.SAFE_SIGNATURE_PREFIXES)
       : DEFAULT_SAFE_SIGNATURE_PREFIXES,
+    homelabServicesPath: process.env.HOMELAB_SERVICES_PATH ?? './data/homelab-services.json',
   };
 }

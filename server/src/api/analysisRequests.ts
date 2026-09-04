@@ -9,6 +9,10 @@ import { listFindings } from '../db/findingsStore.js';
 import type { LensDb } from '../db/lensDb.js';
 import type { SinkDb } from '../db/sinkDb.js';
 import { eventsForSignature, eventsForSourceIp, type StoredEvent } from '../db/sinkQueries.js';
+import {
+  annotateHomelabDestinations,
+  type HomelabRegistry,
+} from '../enrichment/homelabServices.js';
 import type { UnifiMcpClient } from '../enrichment/unifiMcpClient.js';
 
 const RECENT_EVENTS_LIMIT = 20;
@@ -31,7 +35,8 @@ function getBaselineHistory(lensDb: LensDb, category: string, signature: string)
 export function createAnalysisRequestsRouter(
   lensDb: LensDb,
   unifiMcp: UnifiMcpClient,
-  sinkDb: SinkDb | null
+  sinkDb: SinkDb | null,
+  homelabServices: HomelabRegistry = {}
 ): Router {
   const router = Router();
 
@@ -61,7 +66,13 @@ export function createAnalysisRequestsRouter(
     const request = createAnalysisRequest(
       lensDb,
       findingId,
-      { finding, knownClient, firewallSummary, recentEvents, baselineHistory },
+      {
+        finding,
+        knownClient,
+        firewallSummary,
+        recentEvents: annotateHomelabDestinations(recentEvents, homelabServices),
+        baselineHistory,
+      },
       new Date().toISOString()
     );
     res.json(request);

@@ -136,6 +136,40 @@ describe('analysis-requests API', () => {
     expect(context.baselineHistory[0].count).toBe(4);
   });
 
+  it('annotates recent events with a matching homelab service', async () => {
+    const lensDb = openLensDb(':memory:');
+    const sinkDb = makeSinkDb();
+    sinkDb.conn
+      .prepare(
+        `INSERT INTO events (received_at, category, source_ip, dest_ip, dest_port, signature, raw)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run('2026-08-30T00:00:00Z', 'firewall', '5.5.5.5', '192.168.1.26', 8989, 'blocked-port-scan', '{}');
+
+    const finding = upsertFinding(lensDb, applyTrigger(null, 'internal_source', 't0', 'source_ip', '5.5.5.5'));
+
+    const app = express();
+    app.use(express.json());
+    app.use(
+      '/api',
+      createAnalysisRequestsRouter(lensDb, createUnifiMcpClient(null), sinkDb, {
+        '192.168.1.26': { label: 'homelab', services: [{ port: 8989, name: 'sonarr' }] },
+      })
+    );
+
+    const analyzeRes = await request(app).post(`/api/findings/${finding.id}/analyze`);
+    expect(analyzeRes.status).toBe(200);
+
+    const stored = lensDb.conn
+      .prepare('SELECT context FROM analysis_requests WHERE id = ?')
+      .get(analyzeRes.body.id) as { context: string };
+    const context = JSON.parse(stored.context);
+    expect(context.recentEvents[0].homelab).toEqual({
+      host: 'homelab',
+      service: { port: 8989, name: 'sonarr' },
+    });
+  });
+
   it('degrades gracefully with sinkDb=null: no recentEvents, request still created', async () => {
     const lensDb = openLensDb(':memory:');
     const finding = upsertFinding(lensDb, applyTrigger(null, 'internal_source', 't0', 'source_ip', '7.7.7.7'));

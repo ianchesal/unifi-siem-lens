@@ -12,6 +12,7 @@ import { createFindingsRouter } from './api/findings.js';
 import type { Config } from './config.js';
 import type { LensDb } from './db/lensDb.js';
 import type { SinkDb } from './db/sinkDb.js';
+import { loadHomelabServices } from './enrichment/homelabServices.js';
 import { createUnifiMcpClient } from './enrichment/unifiMcpClient.js';
 import { registerAnalysisTools } from './mcp/tools.js';
 
@@ -39,6 +40,7 @@ export function createApp(
   app.use(express.json());
 
   const unifiMcp = createUnifiMcpClient(config.unifiMcpServerUrl, config.unifiMcpServerToken);
+  const homelabServices = loadHomelabServices(config.homelabServicesPath);
 
   const mcpAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
     const auth = req.headers.authorization;
@@ -70,7 +72,7 @@ export function createApp(
 
   app.use('/api', createEventsRouter(sinkDb));
   app.use('/api', createFindingsRouter(lensDb, sinkDb));
-  app.use('/api', createAnalysisRequestsRouter(lensDb, unifiMcp, sinkDb));
+  app.use('/api', createAnalysisRequestsRouter(lensDb, unifiMcp, sinkDb, homelabServices));
 
   app.post('/api/analysis/run', (_req, res) => {
     if (!runnerDeps) {

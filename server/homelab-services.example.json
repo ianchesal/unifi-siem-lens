@@ -1,0 +1,8 @@
+{
+  "192.168.1.26": {
+    "label": "example-homelab-host",
+    "services": [
+      { "port": 8080, "name": "example-service", "description": "what it is / why traffic to it is expected" }
+    ]
+  }
+}

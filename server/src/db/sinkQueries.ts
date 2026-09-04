@@ -7,6 +7,7 @@ export interface StoredEvent {
   severity: number | null;
   source_ip: string | null;
   dest_ip: string | null;
+  dest_port: number | null;
   action: string | null;
   signature: string | null;
   message: string | null;
@@ -24,7 +25,7 @@ export function listEvents(db: SinkDb, opts: { since?: string; limit?: number })
   const limit = Math.min(opts.limit ?? 100, 500);
   return db.conn
     .prepare(
-      `SELECT id, received_at, category, severity, source_ip, dest_ip, signature, message, raw
+      `SELECT id, received_at, category, severity, source_ip, dest_ip, dest_port, signature, message, raw
        FROM events ${where} ORDER BY received_at DESC LIMIT ?`
     )
     .all(...params, limit) as unknown as StoredEvent[];
@@ -36,7 +37,7 @@ export function listEvents(db: SinkDb, opts: { since?: string; limit?: number })
 export function eventsForSourceIp(db: SinkDb, sourceIp: string, limit = 20): StoredEvent[] {
   return db.conn
     .prepare(
-      `SELECT id, received_at, category, severity, source_ip, dest_ip, action, signature, message, raw
+      `SELECT id, received_at, category, severity, source_ip, dest_ip, dest_port, action, signature, message, raw
        FROM events WHERE source_ip = ? ORDER BY received_at DESC LIMIT ?`
     )
     .all(sourceIp, limit) as unknown as StoredEvent[];
@@ -51,7 +52,7 @@ export function eventsForSignature(
 ): StoredEvent[] {
   return db.conn
     .prepare(
-      `SELECT id, received_at, category, severity, source_ip, dest_ip, action, signature, message, raw
+      `SELECT id, received_at, category, severity, source_ip, dest_ip, dest_port, action, signature, message, raw
        FROM events WHERE category = ? AND signature = ? ORDER BY received_at DESC LIMIT ?`
     )
     .all(category, signature, limit) as unknown as StoredEvent[];
