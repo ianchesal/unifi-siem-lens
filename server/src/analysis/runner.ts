@@ -16,6 +16,7 @@ import {
   signatureEventCounts,
   sourceIpEventCounts,
 } from '../db/sinkQueries.js';
+import type { HomelabRegistry } from '../enrichment/homelabServices.js';
 import { computeBaseline, isAnomalous } from './baseline.js';
 import { isInternalSource } from './cidr.js';
 import { applyTrigger, type Finding, reevaluateTrigger } from './findings.js';
@@ -29,6 +30,7 @@ import { isSustained, REPEAT_OFFENDER_WINDOW_DAYS } from './repeatOffender.js';
 import {
   NON_SECURITY_OPERATIONAL_CATEGORIES,
   tryAdminAuditLoginRule,
+  tryHomelabServiceRule,
   tryOperationalNoiseRule,
   tryReputationBlocklistRule,
 } from './ruleTriage.js';
@@ -39,6 +41,11 @@ export interface RunnerDeps {
   lanCidrs: string[];
   trustedAdminNames: string[];
   safeSignaturePrefixes: string[];
+  // Optional: per-deployment registry of known homelab hosts/services (see
+  // enrichment/homelabServices.ts). Absent/empty is a genuine no-op for
+  // tryRuleTriage's homelab-service-egress check, same tolerance pattern as
+  // the rest of that module's optional local config.
+  homelabServices?: HomelabRegistry;
 }
 
 const NEW_ENTITY_WINDOW_HOURS = 24;
@@ -68,7 +75,11 @@ function runCheck(name: string, fn: () => number): number {
   }
 }
 
-export type RuleName = 'admin_login' | 'operational_noise' | 'reputation_blocklist';
+export type RuleName =
+  | 'admin_login'
+  | 'operational_noise'
+  | 'reputation_blocklist'
+  | 'homelab_service_egress';
 
 export interface TriageOutcome {
   matched: boolean;
@@ -165,6 +176,40 @@ function tryRuleTriage(
       );
       verdict = tryReputationBlocklistRule(blockCounts);
       if (verdict) rule = 'reputation_blocklist';
+    }
+
+    // Outbound hits where every backing event's (source_ip, dest_port) pair
+    // matches a documented homelab service's own listen port — e.g. a
+    // self-hosted P2P client (slskd/Soulseek) whose normal peer traffic on
+    // its configured port trips a generic byte-pattern IDS signature. Tried
+    // one (host, service) pair at a time since the completeness bar is
+    // per-pair; first full match wins, same as the other signature rules.
+    if (!verdict && category === 'ips_alert') {
+      const hostServicePairs = Object.entries(deps.homelabServices ?? {}).flatMap(
+        ([hostIp, host]) => host.services.map((service) => ({ hostIp, host, service }))
+      );
+      for (const { hostIp, host, service } of hostServicePairs) {
+        if (verdict) break;
+        const counts = signatureEventCounts(
+          deps.sinkDb,
+          category,
+          signature,
+          sinceIso,
+          `action = 'blocked' AND source_ip = ? AND dest_port = ?`,
+          [hostIp, service.port],
+          untilIso
+        );
+        const homelabVerdict = tryHomelabServiceRule(counts, {
+          hostLabel: host.label,
+          serviceName: service.name,
+          serviceDescription: service.description,
+          port: service.port,
+        });
+        if (homelabVerdict) {
+          verdict = homelabVerdict;
+          rule = 'homelab_service_egress';
+        }
+      }
     }
   }
 
@@ -417,7 +462,12 @@ export function runRuleTriageBackfill(deps: RunnerDeps): BackfillResult {
   const result: BackfillResult = {
     checked: 0,
     dismissed: 0,
-    byRule: { admin_login: 0, operational_noise: 0, reputation_blocklist: 0 },
+    byRule: {
+      admin_login: 0,
+      operational_noise: 0,
+      reputation_blocklist: 0,
+      homelab_service_egress: 0,
+    },
   };
 
   const candidates = listFindings(deps.lensDb).filter(

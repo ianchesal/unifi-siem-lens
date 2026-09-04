@@ -18,17 +18,32 @@ function seededSinkDb(
     source_ip: string | null;
     action?: string | null;
     message?: string | null;
+    dest_ip?: string | null;
+    dest_port?: number | null;
   }[]
 ) {
   const conn = new DatabaseSync(':memory:');
   conn.exec(
     `CREATE TABLE events (id INTEGER PRIMARY KEY, received_at TEXT, category TEXT,
-     signature TEXT, source_ip TEXT, severity INTEGER, action TEXT, message TEXT)`
+     signature TEXT, source_ip TEXT, severity INTEGER, action TEXT, message TEXT,
+     dest_ip TEXT, dest_port INTEGER)`
   );
   const stmt = conn.prepare(
-    'INSERT INTO events (received_at, category, signature, source_ip, action, message) VALUES (?, ?, ?, ?, ?, ?)'
+    `INSERT INTO events (received_at, category, signature, source_ip, action, message, dest_ip, dest_port)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
-  for (const r of rows) stmt.run(r.received_at, r.category, r.signature, r.source_ip, r.action ?? null, r.message ?? null);
+  for (const r of rows) {
+    stmt.run(
+      r.received_at,
+      r.category,
+      r.signature,
+      r.source_ip,
+      r.action ?? null,
+      r.message ?? null,
+      r.dest_ip ?? null,
+      r.dest_port ?? null
+    );
+  }
   return { conn };
 }
 
@@ -283,6 +298,95 @@ describe('rule-based triage', () => {
     const ruleRequests = getAnalysisRequestsForFinding(lensDb, finding?.id as number).filter((r) => r.source === 'rule');
     expect(ruleRequests).toHaveLength(1);
     expect(ruleRequests[0].status).toBe('answered');
+  });
+
+  it('auto-dismisses a new_signature finding whose events all match a known homelab service egress port', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      {
+        received_at: now.toISOString(),
+        category: 'ips_alert',
+        signature: 'ET MALWARE Backdoor family PCRat/Gh0st CnC traffic',
+        source_ip: '192.168.1.26',
+        dest_ip: '71.1.236.121',
+        dest_port: 50300,
+        action: 'blocked',
+      },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks(
+      {
+        sinkDb,
+        lensDb,
+        lanCidrs: [],
+        trustedAdminNames: [],
+        safeSignaturePrefixes: ['ET DROP'],
+        homelabServices: {
+          '192.168.1.26': {
+            label: 'tranquility',
+            services: [{ port: 50300, name: 'slskd', description: 'Soulseek P2P listen port' }],
+          },
+        },
+      },
+      now
+    );
+
+    const finding = listFindings(lensDb, { status: 'dismissed' }).find(
+      (f) => f.entity_key === 'ips_alert|ET MALWARE Backdoor family PCRat/Gh0st CnC traffic'
+    );
+    expect(finding).toBeDefined();
+    const requests = getAnalysisRequestsForFinding(lensDb, finding?.id as number);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].source).toBe('rule');
+    expect(requests[0].risk_level).toBe('low');
+    expect(requests[0].recommendation).toContain('slskd');
+  });
+
+  it('does not auto-dismiss via the homelab-service rule when an event falls outside the known port', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      {
+        received_at: now.toISOString(),
+        category: 'ips_alert',
+        signature: 'ET MALWARE Backdoor family PCRat/Gh0st CnC traffic',
+        source_ip: '192.168.1.26',
+        dest_ip: '71.1.236.121',
+        dest_port: 50300,
+        action: 'blocked',
+      },
+      {
+        received_at: now.toISOString(),
+        category: 'ips_alert',
+        signature: 'ET MALWARE Backdoor family PCRat/Gh0st CnC traffic',
+        source_ip: '192.168.1.26',
+        dest_ip: '198.51.100.9',
+        dest_port: 4444,
+        action: 'blocked',
+      },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks(
+      {
+        sinkDb,
+        lensDb,
+        lanCidrs: [],
+        trustedAdminNames: [],
+        safeSignaturePrefixes: ['ET DROP'],
+        homelabServices: {
+          '192.168.1.26': {
+            label: 'tranquility',
+            services: [{ port: 50300, name: 'slskd', description: 'Soulseek P2P listen port' }],
+          },
+        },
+      },
+      now
+    );
+
+    const finding = listFindings(lensDb).find(
+      (f) => f.entity_key === 'ips_alert|ET MALWARE Backdoor family PCRat/Gh0st CnC traffic'
+    );
+    expect(finding?.status).toBe('new');
+    expect(getAnalysisRequestsForFinding(lensDb, finding?.id as number)).toHaveLength(0);
   });
 });
 

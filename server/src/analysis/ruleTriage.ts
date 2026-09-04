@@ -66,3 +66,32 @@ export function tryReputationBlocklistRule(counts: EntityEventCounts): TriageVer
     riskLevel: 'low',
   };
 }
+
+// A known homelab host's own self-hosted service (e.g. a Docker container's
+// exposed port, from the private homelab-services.json registry — see
+// enrichment/homelabServices.ts) using its documented port. Distinct from
+// the other two rules: those describe fixed, project-independent traffic
+// shapes; this one is keyed off a per-deployment registry entry, so the
+// matched service is threaded through into the recommendation text.
+export interface HomelabServiceMatch {
+  hostLabel: string;
+  serviceName: string;
+  serviceDescription?: string;
+  port: number;
+}
+
+export function tryHomelabServiceRule(
+  counts: EntityEventCounts,
+  service: HomelabServiceMatch
+): TriageVerdict | null {
+  if (!isComplete(counts)) return null;
+  const description = service.serviceDescription ? ` — ${service.serviceDescription}` : '';
+  return {
+    recommendation:
+      `Every event behind this finding is outbound traffic from a known homelab service ` +
+      `("${service.serviceName}" on ${service.hostLabel}, port ${service.port}${description}), ` +
+      `matching that service's own documented port rather than evidence of compromise. ` +
+      `Auto-dismissed by rule.`,
+    riskLevel: 'low',
+  };
+}

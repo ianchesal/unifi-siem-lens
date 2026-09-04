@@ -2,6 +2,7 @@ import { type RunnerDeps, runDailyAnomalyCheck, runHourlyChecks } from './analys
 import { loadConfig } from './config.js';
 import { openLensDb } from './db/lensDb.js';
 import { openSinkDb, type SinkDb, verifySchema } from './db/sinkDb.js';
+import { loadHomelabServices } from './enrichment/homelabServices.js';
 import { createLogger } from './logger.js';
 import { createApp, type SchemaCheckResult } from './server.js';
 
@@ -31,6 +32,7 @@ try {
 }
 
 const lensDb = openLensDb(config.lensDbPath);
+const homelabServices = loadHomelabServices(config.homelabServicesPath);
 const runnerDeps: RunnerDeps | null = sinkDb
   ? {
       sinkDb,
@@ -38,6 +40,7 @@ const runnerDeps: RunnerDeps | null = sinkDb
       lanCidrs: config.lanCidrs,
       trustedAdminNames: config.trustedAdminNames,
       safeSignaturePrefixes: config.safeSignaturePrefixes,
+      homelabServices,
     }
   : null;
 

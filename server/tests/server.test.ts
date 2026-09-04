@@ -93,7 +93,12 @@ describe('createApp /api/admin/backfill-rule-triage', () => {
     expect(res.body).toEqual({
       checked: 0,
       dismissed: 0,
-      byRule: { admin_login: 0, operational_noise: 0, reputation_blocklist: 0 },
+      byRule: {
+        admin_login: 0,
+        operational_noise: 0,
+        reputation_blocklist: 0,
+        homelab_service_egress: 0,
+      },
     });
   });
 });

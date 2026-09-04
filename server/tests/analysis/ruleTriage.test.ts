@@ -3,6 +3,7 @@ import {
   NON_SECURITY_OPERATIONAL_CATEGORIES,
   parseAdminAuditName,
   tryAdminAuditLoginRule,
+  tryHomelabServiceRule,
   tryOperationalNoiseRule,
   tryReputationBlocklistRule,
 } from '../../src/analysis/ruleTriage.js';
@@ -86,6 +87,35 @@ describe('tryReputationBlocklistRule', () => {
 
   it('does not match when at least one event is not a blocked reputation-list hit', () => {
     expect(tryReputationBlocklistRule({ total: 4, matching: 3 })).toBeNull();
+  });
+});
+
+describe('tryHomelabServiceRule', () => {
+  const service = { hostLabel: 'tranquility', serviceName: 'slskd', port: 50300 };
+
+  it('matches when total equals matching and both are nonzero', () => {
+    const verdict = tryHomelabServiceRule({ total: 4, matching: 4 }, service);
+    expect(verdict).not.toBeNull();
+    expect(verdict?.riskLevel).toBe('low');
+    expect(verdict?.recommendation).toContain('slskd');
+    expect(verdict?.recommendation).toContain('tranquility');
+    expect(verdict?.recommendation).toContain('50300');
+  });
+
+  it('includes the service description when provided', () => {
+    const verdict = tryHomelabServiceRule(
+      { total: 1, matching: 1 },
+      { ...service, serviceDescription: 'Soulseek P2P listen port' }
+    );
+    expect(verdict?.recommendation).toContain('Soulseek P2P listen port');
+  });
+
+  it('does not match when at least one event falls outside the (source_ip, dest_port) pair', () => {
+    expect(tryHomelabServiceRule({ total: 4, matching: 3 }, service)).toBeNull();
+  });
+
+  it('does not match a zero-total window', () => {
+    expect(tryHomelabServiceRule({ total: 0, matching: 0 }, service)).toBeNull();
   });
 });
 
