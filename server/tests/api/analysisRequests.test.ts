@@ -166,6 +166,7 @@ describe('analysis-requests API', () => {
     const context = JSON.parse(stored.context);
     expect(context.recentEvents[0].homelab).toEqual({
       host: 'homelab',
+      notes: [],
       service: { port: 8989, name: 'sonarr' },
     });
   });

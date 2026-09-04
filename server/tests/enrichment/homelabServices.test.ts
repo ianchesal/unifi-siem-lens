@@ -53,6 +53,7 @@ describe('lookupHomelabService', () => {
   it('returns the host label with a matched service', () => {
     expect(lookupHomelabService(registry, '192.168.1.26', 8989)).toEqual({
       host: 'tranquility',
+      notes: [],
       service: { port: 8989, name: 'sonarr' },
     });
   });
@@ -60,6 +61,7 @@ describe('lookupHomelabService', () => {
   it('returns the host label with a null service when the port is unknown', () => {
     expect(lookupHomelabService(registry, '192.168.1.26', 9999)).toEqual({
       host: 'tranquility',
+      notes: [],
       service: null,
     });
   });
@@ -67,6 +69,22 @@ describe('lookupHomelabService', () => {
   it('returns the host label with a null service when no port is given', () => {
     expect(lookupHomelabService(registry, '192.168.1.26', null)).toEqual({
       host: 'tranquility',
+      notes: [],
+      service: null,
+    });
+  });
+
+  it('surfaces host-level notes on every match, regardless of port', () => {
+    const withNotes = {
+      '192.168.1.26': {
+        label: 'tranquility',
+        notes: ['Plex remote access is in use on tranquility'],
+        services: [{ port: 8989, name: 'sonarr' }],
+      },
+    };
+    expect(lookupHomelabService(withNotes, '192.168.1.26', 1)).toEqual({
+      host: 'tranquility',
+      notes: ['Plex remote access is in use on tranquility'],
       service: null,
     });
   });
@@ -80,7 +98,11 @@ describe('annotateHomelabDestinations', () => {
   it('attaches a homelab match keyed off dest_ip/dest_port', () => {
     const events = [{ dest_ip: '192.168.1.26', dest_port: 8989 }];
     expect(annotateHomelabDestinations(events, registry)).toEqual([
-      { dest_ip: '192.168.1.26', dest_port: 8989, homelab: { host: 'tranquility', service: { port: 8989, name: 'sonarr' } } },
+      {
+        dest_ip: '192.168.1.26',
+        dest_port: 8989,
+        homelab: { host: 'tranquility', notes: [], service: { port: 8989, name: 'sonarr' } },
+      },
     ]);
   });
 

@@ -14,6 +14,10 @@ export interface HomelabService {
 
 export interface HomelabHost {
   label: string;
+  // Standing, host-wide context that doesn't map to a single port (e.g.
+  // "Plex remote access is in use on tranquility") — surfaced on every
+  // event matching this host, regardless of which service/port it hit.
+  notes?: string[];
   services: HomelabService[];
 }
 
@@ -34,11 +38,11 @@ export function lookupHomelabService(
   registry: HomelabRegistry,
   ip: string,
   port: number | null
-): { host: string; service: HomelabService | null } | null {
+): { host: string; notes: string[]; service: HomelabService | null } | null {
   const host = registry[ip];
   if (!host) return null;
   const service = port === null ? null : (host.services.find((s) => s.port === port) ?? null);
-  return { host: host.label, service };
+  return { host: host.label, notes: host.notes ?? [], service };
 }
 
 // Attaches a homelab match to each event's dest_ip/dest_port, for events

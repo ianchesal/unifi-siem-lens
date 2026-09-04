@@ -1,6 +1,9 @@
 {
   "192.168.1.26": {
     "label": "example-homelab-host",
+    "notes": [
+      "standing, host-wide context that doesn't map to a single port, e.g. \"Plex remote access is in use on this host\""
+    ],
     "services": [
       { "port": 8080, "name": "example-service", "description": "what it is / why traffic to it is expected" }
     ]

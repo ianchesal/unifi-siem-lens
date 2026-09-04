@@ -167,6 +167,7 @@ image.
    {
      "192.168.1.26": {
        "label": "tranquility (homelab)",
+       "notes": ["Plex remote access is in use on tranquility"],
        "services": [
          { "port": 8989, "name": "sonarr", "description": "TV show PVR" },
          { "port": 8080, "name": "qbittorrent", "description": "torrent client WebUI" }
@@ -179,6 +180,11 @@ image.
    is matched against each event's `dest_port`. An IP present with no
    matching port still returns the host `label`, so you get partial credit
    ("this is at least *a* known host") even for ports you haven't listed.
+   `notes` is optional and free-text — use it for standing, host-wide facts
+   that don't map to a single port (e.g. "Plex remote access is in use" or
+   "this box is intentionally exposed to the internet via Cloudflare
+   Tunnel"). Every note is attached to every event matching that host,
+   regardless of which port it hit.
 3. Restart lens. The file is loaded once at startup — like `SINK_DB_PATH`,
    a missing or malformed file is a silent no-op, never a startup failure.
 
