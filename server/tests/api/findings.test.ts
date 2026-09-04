@@ -69,6 +69,27 @@ describe('findings API', () => {
     expect(explicitIds).toEqual([dismissed.id]);
   });
 
+  it('paginates when limit/offset are passed, returning items + total', async () => {
+    const lensDb = openLensDb(':memory:');
+    for (let i = 0; i < 5; i++) {
+      upsertFinding(lensDb, applyTrigger(null, 'internal_source', 't0', 'source_ip', `10.0.0.${i}`));
+    }
+
+    const app = express();
+    app.use(express.json());
+    app.use('/api', createFindingsRouter(lensDb, null));
+
+    const page1 = await request(app).get('/api/findings?limit=2&offset=0');
+    expect(page1.status).toBe(200);
+    expect(page1.body.total).toBe(5);
+    expect(page1.body.items).toHaveLength(2);
+
+    const page3 = await request(app).get('/api/findings?limit=2&offset=4');
+    expect(page3.status).toBe(200);
+    expect(page3.body.total).toBe(5);
+    expect(page3.body.items).toHaveLength(1);
+  });
+
   it('rejects an invalid status', async () => {
     const lensDb = openLensDb(':memory:');
     const finding = upsertFinding(lensDb, applyTrigger(null, 'internal_source', 't0', 'source_ip', '1.2.3.4'));

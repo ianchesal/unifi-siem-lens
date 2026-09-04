@@ -50,6 +50,8 @@ function relativeTime(iso: string | undefined): string | null {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+const PAGE_SIZE = 20;
+
 const STATUS_TABS = [
   { key: 'active', label: 'Active' },
   { key: 'new', label: 'New' },
@@ -63,18 +65,23 @@ type StatusTab = (typeof STATUS_TABS)[number]['key'];
 
 export function FindingsList({ refreshKey }: { refreshKey: number }) {
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [total, setTotal] = useState(0);
   const [requests, setRequests] = useState<Record<number, AnalysisRequest[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [statusTab, setStatusTab] = useState<StatusTab>('active');
+  const [page, setPage] = useState(0);
   const [viewingEventsFor, setViewingEventsFor] = useState<number | null>(null);
 
   const load = () => {
-    const query = statusTab === 'active' ? '' : `?status=${statusTab}`;
-    fetchJson<Finding[]>(`/api/findings${query}`)
-      .then(async (fs) => {
-        setFindings(fs);
+    const statusParam = statusTab === 'active' ? '' : `status=${statusTab}&`;
+    fetchJson<{ items: Finding[]; total: number }>(
+      `/api/findings?${statusParam}limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`
+    )
+      .then(async ({ items, total: t }) => {
+        setFindings(items);
+        setTotal(t);
         const entries = await Promise.all(
-          fs.map(async (f) => [f.id, await fetchJson<AnalysisRequest[]>(`/api/analysis-requests?findingId=${f.id}`)] as const)
+          items.map(async (f) => [f.id, await fetchJson<AnalysisRequest[]>(`/api/analysis-requests?findingId=${f.id}`)] as const)
         );
         setRequests(Object.fromEntries(entries));
       })
@@ -82,7 +89,12 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey drives a manual reload, not a data dependency
-  useEffect(load, [refreshKey, statusTab]);
+  useEffect(load, [refreshKey, statusTab, page]);
+
+  const selectStatusTab = (tab: StatusTab) => {
+    setStatusTab(tab);
+    setPage(0);
+  };
 
   const setStatus = async (id: number, status: 'acknowledged' | 'dismissed') => {
     await fetch(`/api/findings/${id}/status`, {
@@ -102,6 +114,9 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
 
   const sorted = [...findings].sort((a, b) => b.severity_score - a.severity_score);
   const analyzable = sorted.filter((f) => (requests[f.id] ?? []).length === 0);
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const rangeStart = total === 0 ? 0 : page * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(total, page * PAGE_SIZE + sorted.length);
 
   const analyzeAll = async () => {
     await Promise.all(analyzable.map((f) => requestAnalysis(f.id)));
@@ -114,10 +129,11 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
         <h2 className="section-title">Findings</h2>
         <div className="section-head-right">
           <span className="section-count">
-            {sorted.length} shown{sorted.length > 0 ? ' · sorted by priority' : ''}
+            {total > 0 ? `${rangeStart}–${rangeEnd} of ${total}` : '0 shown'}
+            {total > 0 ? ' · sorted by priority' : ''}
           </span>
           <button className="btn btn-ghost" type="button" disabled={analyzable.length === 0} onClick={analyzeAll}>
-            Analyze all{analyzable.length > 0 ? ` (${analyzable.length})` : ''}
+            Analyze page{analyzable.length > 0 ? ` (${analyzable.length})` : ''}
           </button>
         </div>
       </div>
@@ -128,7 +144,7 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
             key={tab.key}
             type="button"
             className={`status-tab${statusTab === tab.key ? ' is-active' : ''}`}
-            onClick={() => setStatusTab(tab.key)}
+            onClick={() => selectStatusTab(tab.key)}
           >
             {tab.label}
           </button>
@@ -228,6 +244,25 @@ export function FindingsList({ refreshKey }: { refreshKey: number }) {
           );
         })}
       </div>
+
+      {total > 0 && (
+        <div className="pagination">
+          <button className="btn btn-ghost" type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+            Previous
+          </button>
+          <span className="pagination-status">
+            Page {page + 1} of {pageCount}
+          </span>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            disabled={page + 1 >= pageCount}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       {viewingEventsFor !== null && (
         <EventsModal findingId={viewingEventsFor} onClose={() => setViewingEventsFor(null)} />

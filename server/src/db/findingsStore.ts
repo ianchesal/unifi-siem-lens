@@ -67,28 +67,43 @@ export function setFindingStatus(db: LensDb, id: number, status: FindingStatus):
   return row ? rowToFinding(row) : null;
 }
 
+interface FindingsFilter {
+  status?: FindingStatus;
+  excludeStatuses?: FindingStatus[];
+}
+
+function findingsWhereClause(opts: FindingsFilter): { where: string; params: string[] } {
+  if (opts.status) {
+    return { where: 'WHERE status = ?', params: [opts.status] };
+  }
+  if (opts.excludeStatuses && opts.excludeStatuses.length > 0) {
+    const placeholders = opts.excludeStatuses.map(() => '?').join(', ');
+    return { where: `WHERE status NOT IN (${placeholders})`, params: opts.excludeStatuses };
+  }
+  return { where: '', params: [] };
+}
+
 export function listFindings(
   db: LensDb,
-  opts: { status?: FindingStatus; excludeStatuses?: FindingStatus[] } = {}
+  opts: FindingsFilter & { limit?: number; offset?: number } = {}
 ): Finding[] {
-  let rows: FindingRow[];
-  if (opts.status) {
-    rows = db.conn
-      .prepare('SELECT * FROM findings WHERE status = ? ORDER BY severity_score DESC')
-      .all(opts.status) as unknown as FindingRow[];
-  } else if (opts.excludeStatuses && opts.excludeStatuses.length > 0) {
-    const placeholders = opts.excludeStatuses.map(() => '?').join(', ');
-    rows = db.conn
-      .prepare(
-        `SELECT * FROM findings WHERE status NOT IN (${placeholders}) ORDER BY severity_score DESC`
-      )
-      .all(...opts.excludeStatuses) as unknown as FindingRow[];
-  } else {
-    rows = db.conn
-      .prepare('SELECT * FROM findings ORDER BY severity_score DESC')
-      .all() as unknown as FindingRow[];
-  }
+  const { where, params } = findingsWhereClause(opts);
+  const pagination = opts.limit !== undefined ? ' LIMIT ? OFFSET ?' : '';
+  const rows = db.conn
+    .prepare(`SELECT * FROM findings ${where} ORDER BY severity_score DESC${pagination}`)
+    .all(
+      ...params,
+      ...(opts.limit !== undefined ? [opts.limit, opts.offset ?? 0] : [])
+    ) as unknown as FindingRow[];
   return rows.map(rowToFinding);
+}
+
+export function countFindings(db: LensDb, opts: FindingsFilter = {}): number {
+  const { where, params } = findingsWhereClause(opts);
+  const row = db.conn.prepare(`SELECT COUNT(*) as count FROM findings ${where}`).get(...params) as {
+    count: number;
+  };
+  return row.count;
 }
 
 export function hasSeenSignature(db: LensDb, category: string, signature: string): boolean {
