@@ -57,7 +57,11 @@ export function createFindingsRouter(lensDb: LensDb, sinkDb: SinkDb | null): Rou
     res.json(updated);
   });
 
-  router.get('/findings/:id/events', (req, res) => {
+  // Named "activity" rather than "events" — ad blockers and privacy
+  // extensions commonly filter request paths containing "events" as an
+  // analytics-tracking pattern (see /stats/activity-over-time for the same
+  // fix and the root-cause writeup).
+  router.get('/findings/:id/activity', (req, res) => {
     const finding = listFindings(lensDb, {}).find((f) => f.id === Number(req.params.id));
     if (!finding) {
       res.status(404).json({ error: 'finding not found' });

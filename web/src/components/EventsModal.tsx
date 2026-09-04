@@ -25,7 +25,7 @@ export function EventsModal({ findingId, onClose }: { findingId: number; onClose
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchJson<StoredEvent[]>(`/api/findings/${findingId}/events`)
+    fetchJson<StoredEvent[]>(`/api/findings/${findingId}/activity`)
       .then(setEvents)
       .catch((e) => setError(String(e)));
   }, [findingId]);

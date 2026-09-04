@@ -28,7 +28,7 @@ export function KpiStats({ refreshKey }: { refreshKey: number }) {
   }, [refreshKey]);
 
   useEffect(() => {
-    fetchJson<EventsRow[]>('/api/stats/events-over-time?sinceDays=2')
+    fetchJson<EventsRow[]>('/api/stats/activity-over-time?sinceDays=2')
       .then(setEventRows)
       .catch(() => setEventRows(null));
   }, [refreshKey]);

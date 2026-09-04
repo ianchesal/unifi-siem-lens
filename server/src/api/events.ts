@@ -19,7 +19,7 @@ export function createEventsRouter(db: SinkDb | null): Router {
   router.use(
     [
       '/events',
-      '/stats/events-over-time',
+      '/stats/activity-over-time',
       '/stats/top-signatures',
       '/stats/top-source-ips',
       '/stats/severity-distribution',
@@ -39,7 +39,14 @@ export function createEventsRouter(db: SinkDb | null): Router {
     res.json(listEvents(db as SinkDb, { since, limit }));
   });
 
-  router.get('/stats/events-over-time', (req, res) => {
+  // Named to avoid the substring "events" — ad blockers and privacy
+  // extensions (uBlock Origin, Brave Shields, etc.) commonly filter any
+  // request path containing it as an analytics-tracking pattern, silently
+  // cancelling the fetch client-side before it ever reaches this server.
+  // That was the root cause of the Trends chart and "Events, 24h" KPI
+  // appearing permanently empty for some users despite the backend and
+  // data being completely healthy.
+  router.get('/stats/activity-over-time', (req, res) => {
     const sinceDays = req.query.sinceDays ? Number(req.query.sinceDays) : 30;
     res.json(eventsOverTime(db as SinkDb, { sinceDays }));
   });

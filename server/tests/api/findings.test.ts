@@ -102,7 +102,7 @@ describe('findings API', () => {
   });
 });
 
-describe('GET /api/findings/:id/events', () => {
+describe('GET /api/findings/:id/activity', () => {
   it('returns raw events for a source_ip finding', async () => {
     const lensDb = openLensDb(':memory:');
     const finding = upsertFinding(lensDb, applyTrigger(null, 'internal_source', 't0', 'source_ip', '1.2.3.4'));
@@ -115,7 +115,7 @@ describe('GET /api/findings/:id/events', () => {
     app.use(express.json());
     app.use('/api', createFindingsRouter(lensDb, sinkDb));
 
-    const res = await request(app).get(`/api/findings/${finding.id}/events`);
+    const res = await request(app).get(`/api/findings/${finding.id}/activity`);
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0].source_ip).toBe('1.2.3.4');
@@ -136,7 +136,7 @@ describe('GET /api/findings/:id/events', () => {
     app.use(express.json());
     app.use('/api', createFindingsRouter(lensDb, sinkDb));
 
-    const res = await request(app).get(`/api/findings/${finding.id}/events`);
+    const res = await request(app).get(`/api/findings/${finding.id}/activity`);
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0].signature).toBe('ET DROP Foo');
@@ -149,7 +149,7 @@ describe('GET /api/findings/:id/events', () => {
     app.use(express.json());
     app.use('/api', createFindingsRouter(lensDb, sinkDb));
 
-    const res = await request(app).get('/api/findings/999/events');
+    const res = await request(app).get('/api/findings/999/activity');
     expect(res.status).toBe(404);
   });
 
@@ -160,7 +160,7 @@ describe('GET /api/findings/:id/events', () => {
     app.use(express.json());
     app.use('/api', createFindingsRouter(lensDb, null));
 
-    const res = await request(app).get(`/api/findings/${finding.id}/events`);
+    const res = await request(app).get(`/api/findings/${finding.id}/activity`);
     expect(res.status).toBe(503);
   });
 });

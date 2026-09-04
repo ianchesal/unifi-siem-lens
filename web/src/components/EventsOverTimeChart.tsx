@@ -14,7 +14,7 @@ export function EventsOverTimeChart({ sinceDays }: { sinceDays: number }) {
   const [rows, setRows] = useState<Row[]>([]);
 
   useEffect(() => {
-    fetchJson<Row[]>(`/api/stats/events-over-time?sinceDays=${sinceDays}`)
+    fetchJson<Row[]>(`/api/stats/activity-over-time?sinceDays=${sinceDays}`)
       .then(setRows)
       .catch(() => setRows([]));
   }, [sinceDays]);
