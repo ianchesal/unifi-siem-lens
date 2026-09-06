@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { openLensDb } from '../../src/db/lensDb.js';
-import { listFindings, upsertFinding } from '../../src/db/findingsStore.js';
+import { listFindings, markSeenSignature, markSeenSourceIp, upsertFinding } from '../../src/db/findingsStore.js';
 import {
   createAnalysisRequest,
   getAnalysisRequestsForFinding,
@@ -265,6 +265,31 @@ describe('rule-based triage', () => {
       (f) => f.entity_key === 'software_updates|510'
     );
     expect(finding).toBeDefined();
+  });
+
+  it('auto-dismisses an internal-source finding whose events are all operational noise', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      { received_at: now.toISOString(), category: 'unifi_devices', signature: '514', source_ip: '10.0.30.43' },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    // Pre-seed the signature and source IP as already-known so only the
+    // internal-source loop (not new-signature/new-source-ip) processes this
+    // event — isolating the case a known LAN device generates ordinary
+    // device telemetry, which is the actual "device switching APs" scenario.
+    markSeenSignature(lensDb, 'unifi_devices', '514', now.toISOString());
+    markSeenSourceIp(lensDb, '10.0.30.43', now.toISOString());
+    runHourlyChecks(
+      { sinkDb, lensDb, lanCidrs: ['10.0.0.0/8'], trustedAdminNames: [], safeSignaturePrefixes: ['ET DROP'] },
+      now
+    );
+
+    const finding = listFindings(lensDb, { status: 'dismissed' }).find((f) => f.entity_key === '10.0.30.43');
+    expect(finding).toBeDefined();
+    expect(finding?.triggers.some((t) => t.type === 'internal_source' && t.active)).toBe(true);
+    const requests = getAnalysisRequestsForFinding(lensDb, finding?.id as number).filter((r) => r.source === 'rule');
+    expect(requests).toHaveLength(1);
+    expect(requests[0].risk_level).toBe('low');
   });
 
   it('same-pass reopen: a rule-dismissed source IP that also trips internal-source ends the pass as new', () => {

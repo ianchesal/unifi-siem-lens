@@ -154,8 +154,21 @@ already-answered `source: 'rule'` analysis_requests row
 (`setFindingStatus`) — no queue, no click, no AI involved. A finding that
 doesn't fully match any rule is left exactly as it would be without this
 feature. Scope is deliberately narrow: only `new_signature`/`new_source_ip`
-findings are eligible — `anomaly`/`repeat_offender`/`internal_source` are
+findings are eligible for all three rules — `anomaly`/`repeat_offender` are
 standing conditions this doesn't apply to.
+
+The `internal-source` loop gets one narrower exception: right after applying
+an `internal_source` trigger, it also calls `tryRuleTriage` restricted to
+`operational_noise` only (an `allowedRules` param on `tryRuleTriage`) — being
+on the LAN carries no security signal for a finding whose events are all
+non-security operational telemetry, so that trigger alone shouldn't keep it
+stuck at `new` until someone runs the backfill by hand. Deliberately *not*
+extended to `admin_login`/`reputation_blocklist`: an internal host tripping
+one of those is exactly the "possible compromised host talking out" case
+internal-source flagging exists to catch (see the design spec), so it must
+keep surfacing for manual review — the existing "same-pass reopen" test in
+`runner.test.ts` covers that this still escalates back to `new` rather than
+staying auto-dismissed.
 
 Because this only fires at the moment of creation, findings that predate
 the feature (or predate `TRUSTED_ADMIN_NAMES` being configured) never get

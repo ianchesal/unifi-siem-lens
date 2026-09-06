@@ -101,8 +101,19 @@ function tryRuleTriage(
   finding: Finding,
   sinceIso: string,
   nowIso: string,
-  untilIso?: string
+  untilIso?: string,
+  // Restricts which rules may fire, in the same first-match-wins order — used
+  // by the internal-source loop below to allow only operational_noise. That
+  // loop must never let admin_login or reputation_blocklist silently dismiss
+  // an internal-sourced finding: an internal host tripping a security rule
+  // (e.g. blocked traffic to a reputation-blocklisted destination) is exactly
+  // the "possible compromised host talking out" case internal-source flagging
+  // exists to catch, and must keep surfacing for manual review. Undefined
+  // (the default, used by the new-signature/new-source-ip loops and the
+  // backfill) tries every rule, unrestricted.
+  allowedRules?: RuleName[]
 ): TriageOutcome {
+  const allowed = (r: RuleName) => !allowedRules || allowedRules.includes(r);
   const prefixClause = deps.safeSignaturePrefixes.map(() => 'signature LIKE ?').join(' OR ');
   const prefixParams = deps.safeSignaturePrefixes.map((p) => `${p}%`);
 
@@ -110,13 +121,13 @@ function tryRuleTriage(
   let rule: RuleName | undefined;
 
   if (finding.entity_type === 'source_ip') {
-    if (deps.trustedAdminNames.length > 0) {
+    if (allowed('admin_login') && deps.trustedAdminNames.length > 0) {
       const auditEvents = auditCandidateEvents(deps.sinkDb, finding.entity_key, sinceIso, untilIso);
       verdict = tryAdminAuditLoginRule(auditEvents, deps.trustedAdminNames);
       if (verdict) rule = 'admin_login';
     }
 
-    if (!verdict) {
+    if (!verdict && allowed('operational_noise')) {
       const opCounts = sourceIpEventCounts(
         deps.sinkDb,
         finding.entity_key,
@@ -129,7 +140,7 @@ function tryRuleTriage(
       if (verdict) rule = 'operational_noise';
     }
 
-    if (!verdict && prefixClause) {
+    if (!verdict && allowed('reputation_blocklist') && prefixClause) {
       const blockCounts = sourceIpEventCounts(
         deps.sinkDb,
         finding.entity_key,
@@ -292,11 +303,22 @@ export function runHourlyChecks(
     for (const ip of distinctIps) {
       if (!isInternalSource(ip, deps.lanCidrs)) continue;
       const existing = getFinding(deps.lensDb, 'source_ip', ip);
-      upsertFinding(
+      const finding = upsertFinding(
         deps.lensDb,
         applyTrigger(existing, 'internal_source', nowIso, 'source_ip', ip)
       );
       count++;
+
+      // Being on the LAN carries no security signal for a finding whose
+      // events are all non-security operational telemetry — every client is
+      // internal by definition, so the flag adds nothing there. Give it the
+      // same operational-noise auto-dismiss the new-source-ip loop already
+      // would, restricted to that one rule (see tryRuleTriage's allowedRules
+      // doc) — otherwise a purely-operational internal finding sits stuck at
+      // `new` until someone runs the admin backfill by hand.
+      if (finding.status !== 'dismissed') {
+        tryRuleTriage(deps, finding, sinceIso, nowIso, undefined, ['operational_noise']);
+      }
     }
     return count;
   });
