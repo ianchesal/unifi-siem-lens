@@ -508,6 +508,7 @@ export function runRuleTriageBackfill(deps: RunnerDeps): BackfillResult {
     byRule: {
       admin_login: 0,
       operational_noise: 0,
+      low_signal_category: 0,
       reputation_blocklist: 0,
       homelab_service_egress: 0,
     },
