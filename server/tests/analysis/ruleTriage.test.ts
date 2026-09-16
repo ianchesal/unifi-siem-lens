@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LOW_SIGNAL_SYSTEM_CATEGORIES,
   NON_SECURITY_OPERATIONAL_CATEGORIES,
   parseAdminAuditName,
   tryAdminAuditLoginRule,
   tryHomelabServiceRule,
+  tryLowSignalCategoryRule,
   tryOperationalNoiseRule,
   tryReputationBlocklistRule,
 } from '../../src/analysis/ruleTriage.js';
@@ -116,6 +118,34 @@ describe('tryHomelabServiceRule', () => {
 
   it('does not match a zero-total window', () => {
     expect(tryHomelabServiceRule({ total: 0, matching: 0 }, service)).toBeNull();
+  });
+});
+
+describe('tryLowSignalCategoryRule', () => {
+  it('matches when total equals matching and both are nonzero', () => {
+    const verdict = tryLowSignalCategoryRule({ total: 2, matching: 2 });
+    expect(verdict).not.toBeNull();
+    expect(verdict?.riskLevel).toBe('low');
+  });
+
+  it('does not match when some events fall outside the low-signal category set', () => {
+    expect(tryLowSignalCategoryRule({ total: 3, matching: 2 })).toBeNull();
+  });
+
+  it('does not match a zero-total window', () => {
+    expect(tryLowSignalCategoryRule({ total: 0, matching: 0 })).toBeNull();
+  });
+});
+
+describe('LOW_SIGNAL_SYSTEM_CATEGORIES', () => {
+  it('includes system, adminactivity, and detection', () => {
+    expect(LOW_SIGNAL_SYSTEM_CATEGORIES).toContain('system');
+    expect(LOW_SIGNAL_SYSTEM_CATEGORIES).toContain('adminactivity');
+    expect(LOW_SIGNAL_SYSTEM_CATEGORIES).toContain('detection');
+  });
+
+  it('excludes audit, which stays gated behind the trusted-admin-name rule', () => {
+    expect(LOW_SIGNAL_SYSTEM_CATEGORIES).not.toContain('audit');
   });
 });
 

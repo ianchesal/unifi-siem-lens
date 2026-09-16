@@ -4,6 +4,15 @@ export const NON_SECURITY_OPERATIONAL_CATEGORIES = [
   'software_updates',
 ];
 
+// System/administrative bookkeeping categories — distinct from
+// NON_SECURITY_OPERATIONAL_CATEGORIES (device/WAN/firmware health): these are
+// UniFi's own internal record-keeping event streams, never a security
+// signal regardless of content. Deliberately excludes 'audit': an audit-log
+// event's risk depends on *who* logged in, so it stays gated behind
+// tryAdminAuditLoginRule's trusted-admin-name check rather than being
+// blanket-dismissed here — an untrusted-name audit login must still surface.
+export const LOW_SIGNAL_SYSTEM_CATEGORIES = ['system', 'adminactivity', 'detection'];
+
 // Matches the sink's fixed audit-log template exactly (see
 // unifi-siem-sink's normalize.ts UNIFIcategory=Audit / "Network Accessed"
 // event shape). Anchored full-string match, not a substring/includes check
@@ -54,6 +63,15 @@ export function tryOperationalNoiseRule(counts: EntityEventCounts): TriageVerdic
   return {
     recommendation:
       'Every event behind this finding is operational telemetry (WAN health, device connectivity, or software-update status), not a security signal. Auto-dismissed by rule.',
+    riskLevel: 'low',
+  };
+}
+
+export function tryLowSignalCategoryRule(counts: EntityEventCounts): TriageVerdict | null {
+  if (!isComplete(counts)) return null;
+  return {
+    recommendation:
+      'Every event behind this finding is UniFi system/administrative bookkeeping (system, adminactivity, or detection-engine status), not a security signal. Auto-dismissed by rule.',
     riskLevel: 'low',
   };
 }

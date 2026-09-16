@@ -28,9 +28,11 @@ import {
 } from './newEntity.js';
 import { isSustained, REPEAT_OFFENDER_WINDOW_DAYS } from './repeatOffender.js';
 import {
+  LOW_SIGNAL_SYSTEM_CATEGORIES,
   NON_SECURITY_OPERATIONAL_CATEGORIES,
   tryAdminAuditLoginRule,
   tryHomelabServiceRule,
+  tryLowSignalCategoryRule,
   tryOperationalNoiseRule,
   tryReputationBlocklistRule,
 } from './ruleTriage.js';
@@ -78,6 +80,7 @@ function runCheck(name: string, fn: () => number): number {
 export type RuleName =
   | 'admin_login'
   | 'operational_noise'
+  | 'low_signal_category'
   | 'reputation_blocklist'
   | 'homelab_service_egress';
 
@@ -173,6 +176,24 @@ function tryRuleTriage(
       );
       verdict = tryOperationalNoiseRule(opCounts);
       if (verdict) rule = 'operational_noise';
+    }
+
+    if (!verdict && LOW_SIGNAL_SYSTEM_CATEGORIES.includes(category)) {
+      // Same trivial-completeness shape as the operational-noise check above
+      // (category already pins every backing event), just against a
+      // different, non-operational category set. See ruleTriage.ts for why
+      // 'audit' is deliberately excluded from this list.
+      const lowSignalCounts = signatureEventCounts(
+        deps.sinkDb,
+        category,
+        signature,
+        sinceIso,
+        '1=1',
+        [],
+        untilIso
+      );
+      verdict = tryLowSignalCategoryRule(lowSignalCounts);
+      if (verdict) rule = 'low_signal_category';
     }
 
     if (!verdict && category === 'ips_alert' && prefixClause) {

@@ -267,6 +267,47 @@ describe('rule-based triage', () => {
     expect(finding).toBeDefined();
   });
 
+  it('auto-dismisses a low-signal-category new_signature finding (system bookkeeping event)', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      { received_at: now.toISOString(), category: 'system', signature: '100', source_ip: '192.168.1.1' },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks(
+      { sinkDb, lensDb, lanCidrs: [], trustedAdminNames: [], safeSignaturePrefixes: ['ET DROP'] },
+      now
+    );
+
+    const finding = listFindings(lensDb, { status: 'dismissed' }).find((f) => f.entity_key === 'system|100');
+    expect(finding).toBeDefined();
+    const requests = getAnalysisRequestsForFinding(lensDb, finding?.id as number);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].source).toBe('rule');
+    expect(requests[0].risk_level).toBe('low');
+  });
+
+  it('leaves an untrusted-name audit-category new_signature finding for manual/AI review', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      {
+        received_at: now.toISOString(),
+        category: 'audit',
+        signature: '200',
+        source_ip: '192.168.1.200',
+        message: 'Mallory accessed UniFi Network using the web. Source IP: 192.168.1.200',
+      },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks(
+      { sinkDb, lensDb, lanCidrs: [], trustedAdminNames: ['Ian C.'], safeSignaturePrefixes: ['ET DROP'] },
+      now
+    );
+
+    const finding = listFindings(lensDb).find((f) => f.entity_key === 'audit|200');
+    expect(finding?.status).toBe('new');
+    expect(getAnalysisRequestsForFinding(lensDb, finding?.id as number)).toHaveLength(0);
+  });
+
   it('auto-dismisses an internal-source finding whose events are all operational noise', () => {
     const now = new Date('2026-08-31T12:00:00Z');
     const sinkDb = seededSinkDb([
