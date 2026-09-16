@@ -85,6 +85,38 @@ export function tryReputationBlocklistRule(counts: EntityEventCounts): TriageVer
   };
 }
 
+// An inbound IDS/IPS hit, already blocked, where every event behind the
+// finding targets a host explicitly marked `wanExposed` in the homelab
+// registry (see enrichment/homelabServices.ts) — i.e. a host the user has
+// confirmed is intentionally internet-reachable (port forward/DMZ), not
+// merely one that happens to run documented services. That distinction
+// matters: `tryHomelabServiceRule` below trusts a registered (host, port)
+// pair for *outbound* traffic the host itself initiates, which says nothing
+// about whether unsolicited *inbound* WAN traffic reaching that host is
+// expected. A host with no WAN exposure receiving external traffic at all
+// is itself suspicious (e.g. a stray UPnP mapping) and must keep surfacing
+// for manual review — hence the separate opt-in flag rather than reusing
+// registry presence alone.
+export interface ExposedHostMatch {
+  hostLabel: string;
+}
+
+export function tryExposedHostScanRule(
+  counts: EntityEventCounts,
+  host: ExposedHostMatch
+): TriageVerdict | null {
+  if (!isComplete(counts)) return null;
+  return {
+    recommendation:
+      `Every event behind this finding is a blocked inbound IDS/IPS hit against ` +
+      `${host.hostLabel}, a host documented as intentionally internet-facing. ` +
+      `Consistent with routine internet-wide scanning against an exposed host, ` +
+      `already blocked, rather than a successful or targeted compromise. ` +
+      `Auto-dismissed by rule.`,
+    riskLevel: 'low',
+  };
+}
+
 // A known homelab host's own self-hosted service (e.g. a Docker container's
 // exposed port, from the private homelab-services.json registry — see
 // enrichment/homelabServices.ts) using its documented port. Distinct from

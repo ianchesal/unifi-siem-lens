@@ -6,14 +6,20 @@ interface BackfillResult {
   byRule: {
     admin_login: number;
     operational_noise: number;
+    low_signal_category: number;
     reputation_blocklist: number;
+    homelab_service_egress: number;
+    exposed_host_scan: number;
   };
 }
 
 const RULE_LABELS: Record<keyof BackfillResult['byRule'], string> = {
   admin_login: 'admin-audit-login rule',
   operational_noise: 'operational-noise rule',
+  low_signal_category: 'low-signal-category rule',
   reputation_blocklist: 'reputation-blocklist rule',
+  homelab_service_egress: 'homelab-service-egress rule',
+  exposed_host_scan: 'exposed-host-scan rule',
 };
 
 export function AdminPage() {

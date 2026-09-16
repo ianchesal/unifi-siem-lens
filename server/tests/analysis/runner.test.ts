@@ -454,6 +454,124 @@ describe('rule-based triage', () => {
     expect(finding?.status).toBe('new');
     expect(getAnalysisRequestsForFinding(lensDb, finding?.id as number)).toHaveLength(0);
   });
+
+  it('auto-dismisses a new_source_ip finding whose only event is a blocked hit against a wanExposed host', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      {
+        received_at: now.toISOString(),
+        category: 'ips_alert',
+        signature: 'ET MALWARE VenomRAT CnC Server Keepalive',
+        source_ip: '24.118.178.16',
+        dest_ip: '192.168.1.26',
+        dest_port: 58370,
+        action: 'blocked',
+      },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks(
+      {
+        sinkDb,
+        lensDb,
+        lanCidrs: [],
+        trustedAdminNames: [],
+        safeSignaturePrefixes: ['ET DROP'],
+        homelabServices: {
+          '192.168.1.26': {
+            label: 'tranquility',
+            wanExposed: true,
+            services: [{ port: 50300, name: 'slskd' }],
+          },
+        },
+      },
+      now
+    );
+
+    const finding = listFindings(lensDb, { status: 'dismissed' }).find(
+      (f) => f.entity_key === '24.118.178.16'
+    );
+    expect(finding).toBeDefined();
+    const requests = getAnalysisRequestsForFinding(lensDb, finding?.id as number);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].source).toBe('rule');
+    expect(requests[0].risk_level).toBe('low');
+    expect(requests[0].recommendation).toContain('tranquility');
+  });
+
+  it('does not auto-dismiss via the exposed-host rule when the host is not marked wanExposed', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      {
+        received_at: now.toISOString(),
+        category: 'ips_alert',
+        signature: 'ET MALWARE VenomRAT CnC Server Keepalive',
+        source_ip: '24.118.178.16',
+        dest_ip: '192.168.1.26',
+        dest_port: 58370,
+        action: 'blocked',
+      },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks(
+      {
+        sinkDb,
+        lensDb,
+        lanCidrs: [],
+        trustedAdminNames: [],
+        safeSignaturePrefixes: ['ET DROP'],
+        homelabServices: {
+          '192.168.1.26': { label: 'tranquility', services: [] },
+        },
+      },
+      now
+    );
+
+    const finding = listFindings(lensDb).find((f) => f.entity_key === '24.118.178.16');
+    expect(finding?.status).toBe('new');
+    expect(getAnalysisRequestsForFinding(lensDb, finding?.id as number)).toHaveLength(0);
+  });
+
+  it('does not auto-dismiss via the exposed-host rule when an event misses the wanExposed host', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      {
+        received_at: now.toISOString(),
+        category: 'ips_alert',
+        signature: 'ET MALWARE VenomRAT CnC Server Keepalive',
+        source_ip: '24.118.178.16',
+        dest_ip: '192.168.1.26',
+        dest_port: 58370,
+        action: 'blocked',
+      },
+      {
+        received_at: now.toISOString(),
+        category: 'ips_alert',
+        signature: 'ET MALWARE VenomRAT CnC Server Keepalive',
+        source_ip: '24.118.178.16',
+        dest_ip: '10.0.0.9',
+        dest_port: 22,
+        action: 'blocked',
+      },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks(
+      {
+        sinkDb,
+        lensDb,
+        lanCidrs: [],
+        trustedAdminNames: [],
+        safeSignaturePrefixes: ['ET DROP'],
+        homelabServices: {
+          '192.168.1.26': { label: 'tranquility', wanExposed: true, services: [] },
+        },
+      },
+      now
+    );
+
+    const finding = listFindings(lensDb).find((f) => f.entity_key === '24.118.178.16');
+    expect(finding?.status).toBe('new');
+    expect(getAnalysisRequestsForFinding(lensDb, finding?.id as number)).toHaveLength(0);
+  });
 });
 
 describe('runRuleTriageBackfill', () => {

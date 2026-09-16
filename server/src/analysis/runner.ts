@@ -31,6 +31,7 @@ import {
   LOW_SIGNAL_SYSTEM_CATEGORIES,
   NON_SECURITY_OPERATIONAL_CATEGORIES,
   tryAdminAuditLoginRule,
+  tryExposedHostScanRule,
   tryHomelabServiceRule,
   tryLowSignalCategoryRule,
   tryOperationalNoiseRule,
@@ -82,7 +83,8 @@ export type RuleName =
   | 'operational_noise'
   | 'low_signal_category'
   | 'reputation_blocklist'
-  | 'homelab_service_egress';
+  | 'homelab_service_egress'
+  | 'exposed_host_scan';
 
 export interface TriageOutcome {
   matched: boolean;
@@ -94,8 +96,9 @@ export interface TriageOutcome {
 // upper bound — all events from sinceIso onward — when untilIso is omitted,
 // which is how the live hourly path calls this: the finding was *just*
 // created/updated, so "now" is the natural upper bound). Fires at most one
-// rule (admin login, then operational noise, then reputation blocklist —
-// first match wins) and, on a match, writes an already-answered
+// rule (admin login, then operational noise, then reputation blocklist, then
+// exposed-host scan noise for source_ip findings — first match wins) and, on
+// a match, writes an already-answered
 // analysis_requests row and dismisses the finding directly. No-op (returns
 // { matched: false }, finding untouched) if no rule fully explains every
 // event behind it.
@@ -154,6 +157,33 @@ function tryRuleTriage(
       );
       verdict = tryReputationBlocklistRule(blockCounts);
       if (verdict) rule = 'reputation_blocklist';
+    }
+
+    // Blocked inbound IDS/IPS hits against a host explicitly confirmed
+    // WAN-exposed (see ruleTriage.ts's tryExposedHostScanRule doc) —
+    // deliberately not signature-restricted like reputation_blocklist:
+    // an attacker's target port is arbitrary/unpredictable, so the
+    // completeness bar is carried entirely by "every event from this
+    // source IP is a blocked ips_alert hit against this specific
+    // wanExposed host," tried one host at a time (first full match wins,
+    // same pattern as the homelab_service_egress loop below).
+    if (!verdict && allowed('exposed_host_scan')) {
+      for (const [hostIp, host] of Object.entries(deps.homelabServices ?? {})) {
+        if (verdict || !host.wanExposed) continue;
+        const exposedCounts = sourceIpEventCounts(
+          deps.sinkDb,
+          finding.entity_key,
+          sinceIso,
+          `category = 'ips_alert' AND action = 'blocked' AND dest_ip = ?`,
+          [hostIp],
+          untilIso
+        );
+        const exposedVerdict = tryExposedHostScanRule(exposedCounts, { hostLabel: host.label });
+        if (exposedVerdict) {
+          verdict = exposedVerdict;
+          rule = 'exposed_host_scan';
+        }
+      }
     }
   } else {
     const { category, signature } = splitSignatureKey(finding.entity_key);
@@ -511,6 +541,7 @@ export function runRuleTriageBackfill(deps: RunnerDeps): BackfillResult {
       low_signal_category: 0,
       reputation_blocklist: 0,
       homelab_service_egress: 0,
+      exposed_host_scan: 0,
     },
   };
 

@@ -99,6 +99,7 @@ describe('createApp /api/admin/backfill-rule-triage', () => {
         low_signal_category: 0,
         reputation_blocklist: 0,
         homelab_service_egress: 0,
+        exposed_host_scan: 0,
       },
     });
   });

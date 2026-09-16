@@ -4,6 +4,7 @@ import {
   NON_SECURITY_OPERATIONAL_CATEGORIES,
   parseAdminAuditName,
   tryAdminAuditLoginRule,
+  tryExposedHostScanRule,
   tryHomelabServiceRule,
   tryLowSignalCategoryRule,
   tryOperationalNoiseRule,
@@ -118,6 +119,25 @@ describe('tryHomelabServiceRule', () => {
 
   it('does not match a zero-total window', () => {
     expect(tryHomelabServiceRule({ total: 0, matching: 0 }, service)).toBeNull();
+  });
+});
+
+describe('tryExposedHostScanRule', () => {
+  const host = { hostLabel: 'tranquility' };
+
+  it('matches when total equals matching and both are nonzero', () => {
+    const verdict = tryExposedHostScanRule({ total: 1, matching: 1 }, host);
+    expect(verdict).not.toBeNull();
+    expect(verdict?.riskLevel).toBe('low');
+    expect(verdict?.recommendation).toContain('tranquility');
+  });
+
+  it('does not match when at least one event is not a blocked hit against this host', () => {
+    expect(tryExposedHostScanRule({ total: 2, matching: 1 }, host)).toBeNull();
+  });
+
+  it('does not match a zero-total window', () => {
+    expect(tryExposedHostScanRule({ total: 0, matching: 0 }, host)).toBeNull();
   });
 });
 

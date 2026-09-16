@@ -19,6 +19,14 @@ export interface HomelabHost {
   // event matching this host, regardless of which service/port it hit.
   notes?: string[];
   services: HomelabService[];
+  // Explicit opt-in: this host is confirmed intentionally reachable from the
+  // WAN (port forward/DMZ), not merely a host that happens to run documented
+  // services. Gates ruleTriage.ts's tryExposedHostScanRule — being listed
+  // here for egress-port matching says nothing about inbound exposure, so
+  // that rule requires this separate flag rather than registry presence
+  // alone. Defaults to false/absent (no inbound-scan auto-dismissal) when
+  // omitted.
+  wanExposed?: boolean;
 }
 
 export type HomelabRegistry = Record<string, HomelabHost>;

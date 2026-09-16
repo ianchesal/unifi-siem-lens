@@ -4,6 +4,7 @@
     "notes": [
       "standing, host-wide context that doesn't map to a single port, e.g. \"Plex remote access is in use on this host\""
     ],
+    "wanExposed": false,
     "services": [
       { "port": 8080, "name": "example-service", "description": "what it is / why traffic to it is expected" }
     ]
