@@ -20,7 +20,7 @@
     "zod": "^4.6.4"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.12",
+    "@biomejs/biome": "2.5.13",
     "@types/express": "^5.0.6",
     "@types/node": "^26.5.1",
     "@types/supertest": "^7.2.1",
