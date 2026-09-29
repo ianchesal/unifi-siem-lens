@@ -94,6 +94,12 @@ Pure-function heuristic modules (`cidr.ts`, `newEntity.ts`,
 `runner.ts`) — one broken heuristic must never block the others for that
 run, mirroring the sink's "never stop listening" philosophy.
 
+`IGNORED_SIGNATURE_KEYS` (in `newEntity.ts`) lists exact `category|signature`
+pairs excluded from analysis entirely — filtered out of the runner's hourly
+event scan and the daily anomaly baselines, so they never become findings
+at all (unlike the rule-triage layer below, which dismisses findings after
+creation). Currently just `siteactivity|2154`, the UniFi Protect doorbell ring.
+
 `isAnomalous` (in `baseline.ts`) is deliberately one-sided: only a spike
 above the trailing baseline registers, never a drop. A drop in alert volume
 is more likely a collection/operational problem than a security one for an

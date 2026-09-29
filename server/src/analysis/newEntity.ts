@@ -11,6 +11,21 @@ export function splitSignatureKey(key: string): { category: string; signature: s
   return { category: key.slice(0, sep), signature: key.slice(sep + 1) };
 }
 
+// (category, signature) pairs the lens excludes from analysis entirely — no
+// new-signature finding, no anomaly baseline. Unlike the ruleTriage.ts rules
+// (which auto-dismiss a finding after it's created, leaving an audit trail),
+// these are event types with no security meaning at all, so they never
+// become findings in the first place. Keyed on the exact signatureKey() pair,
+// not the bare signature: UniFi's numeric event codes are only unique within
+// a category.
+//   - siteactivity|2154: UniFi Protect doorbell ring ("Someone is ringing
+//     <door>."), physical-site activity, not network security.
+export const IGNORED_SIGNATURE_KEYS: ReadonlySet<string> = new Set(['siteactivity|2154']);
+
+export function isIgnoredSignature(category: string, signature: string): boolean {
+  return IGNORED_SIGNATURE_KEYS.has(signatureKey(category, signature));
+}
+
 export function detectNewSignatures(
   events: { category: string; signature: string | null }[],
   seen: Set<string>

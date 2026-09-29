@@ -86,6 +86,17 @@ describe('runHourlyChecks', () => {
     const finding = listFindings(lensDb).find((f) => f.entity_key === '203.0.113.9');
     expect(finding?.triggers.some((t) => t.type === 'repeat_offender' && t.active)).toBe(true);
   });
+
+  it('never raises a finding for an ignored signature (Protect doorbell ring)', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const sinkDb = seededSinkDb([
+      { received_at: now.toISOString(), category: 'siteactivity', signature: '2154', source_ip: null },
+    ]);
+    const lensDb = openLensDb(':memory:');
+    runHourlyChecks({ sinkDb, lensDb, lanCidrs: [], trustedAdminNames: [], safeSignaturePrefixes: ['ET DROP'] }, now);
+
+    expect(listFindings(lensDb)).toEqual([]);
+  });
 });
 
 describe('runDailyAnomalyCheck', () => {
@@ -113,6 +124,32 @@ describe('runDailyAnomalyCheck', () => {
 
     const finding = listFindings(lensDb).find((f) => f.entity_key === 'ips_alert|ET TROJAN Foo');
     expect(finding?.triggers.some((t) => t.type === 'anomaly' && t.active)).toBe(true);
+  });
+
+  it('never flags an anomaly for an ignored signature (Protect doorbell ring)', () => {
+    const conn = new DatabaseSync(':memory:');
+    conn.exec(
+      `CREATE TABLE events (id INTEGER PRIMARY KEY, received_at TEXT, category TEXT,
+       signature TEXT, source_ip TEXT, severity INTEGER)`
+    );
+    const stmt = conn.prepare(
+      'INSERT INTO events (received_at, category, signature, source_ip) VALUES (?, ?, ?, ?)'
+    );
+    for (let i = 13; i >= 1; i--) {
+      const day = new Date(Date.UTC(2026, 7, 31 - i)).toISOString().slice(0, 10);
+      stmt.run(`${day}T01:00:00Z`, 'siteactivity', '2154', null);
+    }
+    const spikeDay = '2026-08-30';
+    for (let i = 0; i < 50; i++) {
+      stmt.run(`${spikeDay}T01:00:00Z`, 'siteactivity', '2154', null);
+    }
+    const sinkDb = { conn };
+    const lensDb = openLensDb(':memory:');
+    runDailyAnomalyCheck({ sinkDb, lensDb, lanCidrs: [], trustedAdminNames: [], safeSignaturePrefixes: ['ET DROP'] }, spikeDay);
+
+    expect(listFindings(lensDb)).toEqual([]);
+    const baselineRows = lensDb.conn.prepare('SELECT COUNT(*) as n FROM baselines').get() as { n: number };
+    expect(baselineRows.n).toBe(0);
   });
 });
 

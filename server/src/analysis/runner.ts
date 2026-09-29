@@ -23,6 +23,7 @@ import { applyTrigger, type Finding, reevaluateTrigger } from './findings.js';
 import {
   detectNewSignatures,
   detectNewSourceIps,
+  isIgnoredSignature,
   signatureKey,
   splitSignatureKey,
 } from './newEntity.js';
@@ -60,9 +61,10 @@ interface RecentEventRow {
 }
 
 function recentEvents(sinkDb: SinkDb, sinceIso: string): RecentEventRow[] {
-  return sinkDb.conn
+  const rows = sinkDb.conn
     .prepare('SELECT category, signature, source_ip FROM events WHERE received_at >= ?')
     .all(sinceIso) as unknown as RecentEventRow[];
+  return rows.filter((e) => !(e.signature && isIgnoredSignature(e.category, e.signature)));
 }
 
 // Runs a single named check in isolation: a failure here is logged and contributes
@@ -454,6 +456,7 @@ export function runDailyAnomalyCheck(
       count: number;
     }[];
     for (const row of historicalCounts) {
+      if (isIgnoredSignature(row.category, row.signature)) continue;
       deps.lensDb.conn
         .prepare(
           `INSERT OR IGNORE INTO baselines (category, signature, day, count) VALUES (?, ?, ?, ?)`
@@ -461,13 +464,14 @@ export function runDailyAnomalyCheck(
         .run(row.category, row.signature, row.day, row.count);
     }
 
-    const dayCounts = deps.sinkDb.conn
+    const allDayCounts = deps.sinkDb.conn
       .prepare(
         `SELECT category, signature, COUNT(*) as count FROM events
        WHERE date(received_at) = ? AND signature IS NOT NULL AND signature != ''
        GROUP BY category, signature`
       )
       .all(day) as { category: string; signature: string; count: number }[];
+    const dayCounts = allDayCounts.filter((r) => !isIgnoredSignature(r.category, r.signature));
 
     for (const row of dayCounts) {
       deps.lensDb.conn

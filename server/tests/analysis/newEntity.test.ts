@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectNewSignatures, detectNewSourceIps, signatureKey } from '../../src/analysis/newEntity.js';
+import { detectNewSignatures, detectNewSourceIps, isIgnoredSignature, signatureKey } from '../../src/analysis/newEntity.js';
 
 describe('detectNewSignatures', () => {
   it('flags signatures not already in the seen set', () => {
@@ -27,5 +27,16 @@ describe('detectNewSourceIps', () => {
     const events = [{ source_ip: '1.2.3.4' }, { source_ip: null }, { source_ip: '5.6.7.8' }];
     const result = detectNewSourceIps(events, new Set(['1.2.3.4']));
     expect(result).toEqual(['5.6.7.8']);
+  });
+});
+
+describe('isIgnoredSignature', () => {
+  it('ignores UniFi Protect doorbell-ring events (siteactivity|2154)', () => {
+    expect(isIgnoredSignature('siteactivity', '2154')).toBe(true);
+  });
+
+  it('matches on the exact (category, signature) pair, not the signature alone', () => {
+    expect(isIgnoredSignature('ips_alert', '2154')).toBe(false);
+    expect(isIgnoredSignature('siteactivity', '2155')).toBe(false);
   });
 });
