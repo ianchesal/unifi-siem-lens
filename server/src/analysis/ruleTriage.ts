@@ -76,6 +76,19 @@ export function tryLowSignalCategoryRule(counts: EntityEventCounts): TriageVerdi
   };
 }
 
+// Backfill-only in practice: the live runner filters IGNORED_SIGNATURE_KEYS
+// events out before detection (see newEntity.ts), so this only ever fires for
+// a finding created before its signature was added to the ignore list. No
+// completeness counts — the finding's key alone pins it to the ignored pair,
+// and its old events may have aged out of the window entirely.
+export function tryIgnoredSignatureRule(): TriageVerdict {
+  return {
+    recommendation:
+      'This signature is on the lens ignore list (non-security event type, e.g. a UniFi Protect doorbell ring). It is excluded from analysis going forward; this finding predates that. Auto-dismissed by rule.',
+    riskLevel: 'low',
+  };
+}
+
 export function tryReputationBlocklistRule(counts: EntityEventCounts): TriageVerdict | null {
   if (!isComplete(counts)) return null;
   return {

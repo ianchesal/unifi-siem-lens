@@ -10,6 +10,7 @@ interface BackfillResult {
     reputation_blocklist: number;
     homelab_service_egress: number;
     exposed_host_scan: number;
+    ignored_signature: number;
   };
 }
 
@@ -20,6 +21,7 @@ const RULE_LABELS: Record<keyof BackfillResult['byRule'], string> = {
   reputation_blocklist: 'reputation-blocklist rule',
   homelab_service_egress: 'homelab-service-egress rule',
   exposed_host_scan: 'exposed-host-scan rule',
+  ignored_signature: 'ignored-signature list',
 };
 
 export function AdminPage() {

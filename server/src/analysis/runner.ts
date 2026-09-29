@@ -34,6 +34,7 @@ import {
   tryAdminAuditLoginRule,
   tryExposedHostScanRule,
   tryHomelabServiceRule,
+  tryIgnoredSignatureRule,
   tryLowSignalCategoryRule,
   tryOperationalNoiseRule,
   tryReputationBlocklistRule,
@@ -86,7 +87,8 @@ export type RuleName =
   | 'low_signal_category'
   | 'reputation_blocklist'
   | 'homelab_service_egress'
-  | 'exposed_host_scan';
+  | 'exposed_host_scan'
+  | 'ignored_signature';
 
 export interface TriageOutcome {
   matched: boolean;
@@ -190,7 +192,12 @@ function tryRuleTriage(
   } else {
     const { category, signature } = splitSignatureKey(finding.entity_key);
 
-    if (NON_SECURITY_OPERATIONAL_CATEGORIES.includes(category)) {
+    if (allowed('ignored_signature') && isIgnoredSignature(category, signature)) {
+      verdict = tryIgnoredSignatureRule();
+      rule = 'ignored_signature';
+    }
+
+    if (!verdict && NON_SECURITY_OPERATIONAL_CATEGORIES.includes(category)) {
       // A new_signature finding's events are already scoped to this exact
       // (category, signature) pair by the query below, so once `category`
       // itself is operational, every backing event trivially matches —
@@ -546,6 +553,7 @@ export function runRuleTriageBackfill(deps: RunnerDeps): BackfillResult {
       reputation_blocklist: 0,
       homelab_service_egress: 0,
       exposed_host_scan: 0,
+      ignored_signature: 0,
     },
   };
 

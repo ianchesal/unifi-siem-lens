@@ -99,6 +99,10 @@ pairs excluded from analysis entirely — filtered out of the runner's hourly
 event scan and the daily anomaly baselines, so they never become findings
 at all (unlike the rule-triage layer below, which dismisses findings after
 creation). Currently just `siteactivity|2154`, the UniFi Protect doorbell ring.
+Findings that predate a key's addition to the list are cleaned up by the
+admin backfill, via an `ignored_signature` rule checked first in
+`tryRuleTriage`'s signature branch (no completeness counts — the key alone
+pins it).
 
 `isAnomalous` (in `baseline.ts`) is deliberately one-sided: only a spike
 above the trailing baseline registers, never a drop. A drop in alert volume

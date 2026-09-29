@@ -100,6 +100,7 @@ describe('createApp /api/admin/backfill-rule-triage', () => {
         reputation_blocklist: 0,
         homelab_service_egress: 0,
         exposed_host_scan: 0,
+        ignored_signature: 0,
       },
     });
   });

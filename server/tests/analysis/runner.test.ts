@@ -643,6 +643,22 @@ describe('runRuleTriageBackfill', () => {
     expect(requests[0].source).toBe('rule');
   });
 
+  it('dismisses a pre-existing finding for an ignored signature, even with no events left in its window', () => {
+    const sinkDb = seededSinkDb([]);
+    const lensDb = openLensDb(':memory:');
+    upsertFinding(lensDb, applyTrigger(null, 'new_signature', '2026-08-20T12:00:00Z', 'signature', 'siteactivity|2154'));
+
+    const result = runRuleTriageBackfill(deps(sinkDb, lensDb));
+
+    expect(result.dismissed).toBe(1);
+    expect(result.byRule.ignored_signature).toBe(1);
+    const finding = listFindings(lensDb, { status: 'dismissed' }).find((f) => f.entity_key === 'siteactivity|2154');
+    expect(finding).toBeDefined();
+    const requests = getAnalysisRequestsForFinding(lensDb, finding?.id as number);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].source).toBe('rule');
+  });
+
   it('skips findings that are already dismissed or resolved', () => {
     const sinkDb = seededSinkDb([]);
     const lensDb = openLensDb(':memory:');
