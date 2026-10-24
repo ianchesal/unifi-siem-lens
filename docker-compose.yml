@@ -3,6 +3,8 @@ services:
     build: .
     image: unifi-siem-lens:latest
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=false # locally built image
     ports:
       - "3002:3002"
     env_file:
