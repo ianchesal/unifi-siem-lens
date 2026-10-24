@@ -16,6 +16,6 @@
     "lint": "npm run lint -w server && npm run lint -w web"
   },
   "devDependencies": {
-    "concurrently": "^10.0.5"
+    "concurrently": "^10.0.6"
   }
 }
